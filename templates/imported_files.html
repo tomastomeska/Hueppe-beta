@@ -1,0 +1,58 @@
+{% extends 'base.html' %}
+{% block content %}
+  <h3>Přehled importovaných souborů</h3>
+  
+  <div class="row">
+    <div class="col-12">
+      <div class="table-responsive">
+        <table class="table table-striped">
+          <thead>
+            <tr>
+              <th>Název souboru</th>
+              <th>Zakázka</th>
+              <th>Počet palet</th>
+              <th>Datum importu</th>
+              <th>Hash (ochrana proti duplikátům)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for file in files %}
+              <tr>
+                <td><strong>{{ file.filename }}</strong></td>
+                <td>
+                  <a href="{{ url_for('order_view', order_id=file.order.id) }}">{{ file.order.name }}</a>
+                  {% if file.order.closed %}
+                    <span class="badge bg-success ms-1">Uzavřeno</span>
+                  {% elif file.order.saved_for_later %}
+                    <span class="badge bg-info ms-1">Uloženo</span>
+                  {% endif %}
+                </td>
+                <td>{{ file.rows_imported }}</td>
+                <td>{{ file.uploaded_at.strftime('%d.%m.%Y %H:%M:%S') }}</td>
+                <td><small class="text-muted">{{ file.file_hash[:16] }}...</small></td>
+              </tr>
+            {% else %}
+              <tr>
+                <td colspan="5" class="text-center text-muted">Žádné soubory nebyly importovány</td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      
+      <div class="mt-3">
+        <a href="{{ url_for('index') }}" class="btn btn-secondary">Zpět na přehled zakázek</a>
+      </div>
+      
+      {% if files %}
+      <div class="alert alert-info mt-4">
+        <h5>Informace o ochraně proti duplikátům</h5>
+        <p>Každý importovaný soubor má unikátní hash (SHA256). Pokud se pokusíte nahrát stejný soubor znovu, systém to pozná a zamezí duplikování dat.</p>
+        <p><strong>Celkem importovaných souborů:</strong> {{ files|length }}</p>
+        <p><strong>Celkem importovaných palet:</strong> {{ files|sum(attribute='rows_imported') }}</p>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+  
+{% endblock %}

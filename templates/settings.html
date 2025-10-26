@@ -1,0 +1,83 @@
+{% extends 'base.html' %}
+{% block content %}
+  <h3>Nastavení systému</h3>
+  
+  <form action="{{ url_for('update_settings') }}" method="post">
+    
+    <div class="row">
+      <div class="col-md-6">
+        <h5>Ceník</h5>
+        
+        <div class="mb-3">
+          <label class="form-label">Cena za paletové místo (Kč)</label>
+          <input type="number" step="0.01" name="price_per_place" value="{{ settings.price_per_place }}" class="form-control" required />
+        </div>
+        
+        <div class="mb-3">
+          <label class="form-label">Cena Full truck (Kč)</label>
+          <input type="number" step="0.01" name="full_truck_price" value="{{ settings.full_truck_price }}" class="form-control" required />
+        </div>
+        
+        <h5>Kapacity vozidel</h5>
+        
+        <div class="mb-3">
+          <label class="form-label">Výchozí kapacita (m)</label>
+          <input type="number" step="0.1" name="default_capacity_m" value="{{ settings.default_capacity_m }}" class="form-control" required />
+        </div>
+        
+        <div class="mb-3">
+          <label class="form-label">Velkokapacitní vozidlo (m)</label>
+          <input type="number" step="0.1" name="alternative_capacity_m" value="{{ settings.alternative_capacity_m }}" class="form-control" required />
+        </div>
+      </div>
+      
+      <div class="col-md-6">
+        <h5>E-mailové notifikace</h5>
+        
+        <div class="mb-3">
+          <label class="form-label">Příjemci (odděleni čárkou)</label>
+          <textarea name="email_recipients" class="form-control" rows="3">{{ settings.email_recipients|join(', ') }}</textarea>
+        </div>
+        
+        <h5>SMTP nastavení</h5>
+        
+        <div class="mb-3">
+          <label class="form-label">SMTP server</label>
+          <input type="text" name="smtp_host" value="{{ settings.smtp.host }}" class="form-control" />
+        </div>
+        
+        <div class="mb-3">
+          <label class="form-label">Port</label>
+          <input type="number" name="smtp_port" value="{{ settings.smtp.port }}" class="form-control" />
+        </div>
+        
+        <div class="mb-3">
+          <label class="form-label">Uživatelské jméno</label>
+          <input type="text" name="smtp_username" value="{{ settings.smtp.username }}" class="form-control" />
+        </div>
+        
+        <div class="mb-3">
+          <label class="form-label">Heslo</label>
+          <input type="password" name="smtp_password" value="{{ settings.smtp.password }}" class="form-control" />
+        </div>
+        
+        <div class="mb-3">
+          <label class="form-label">E-mail odesílatele</label>
+          <input type="email" name="smtp_from" value="{{ settings.smtp.from }}" class="form-control" />
+        </div>
+        
+        <div class="mb-3 form-check">
+          <input type="checkbox" name="smtp_use_tls" {{ 'checked' if settings.smtp.use_tls else '' }} class="form-check-input" id="tls" />
+          <label class="form-check-label" for="tls">Použít TLS</label>
+        </div>
+      </div>
+    </div>
+    
+    <div class="mt-4">
+      <button type="submit" class="btn btn-primary">Uložit nastavení</button>
+      <a href="{{ url_for('index') }}" class="btn btn-secondary">Zpět</a>
+    </div>
+    
+  </form>
+  
+{% endblock %}

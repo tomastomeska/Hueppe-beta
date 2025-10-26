@@ -1,0 +1,8 @@
+{
+    "smtp_server": "your-smtp-server.com",
+    "smtp_port": 587,
+    "smtp_username": "your-email@company.com",
+    "smtp_password": "your-password",
+    "smtp_use_tls": true,
+    "default_sender": "your-email@company.com"
+}
