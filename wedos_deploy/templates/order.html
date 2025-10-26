@@ -1,0 +1,1349 @@
+{% extends 'base.html' %}
+{% block content %}
+  <div class="d-flex justify-content-between mb-3">
+    <div>
+      <form method="post" action="{{ url_for('edit_order_name', order_id=order.id) }}" class="d-inline-flex align-items-center">
+        <h2 class="me-2">Zakázka:</h2>
+        <input type="text" name="order_name" value="{{ order.name }}" class="form-control me-2" style="width: 300px;" />
+        <button type="submit" class="btn btn-sm btn-outline-secondary">Uložit jméno</button>
+      </form>
+      {% if order.closed %}<span class="badge bg-success ms-2">Closed</span>{% endif %}
+      {% if order.saved_for_later %}<span class="badge bg-info ms-2">Uloženo na později</span>{% endif %}
+    </div>
+    <div>
+      <a class="btn btn-sm btn-outline-primary" href="{{ url_for('upload', order_id=order.id) }}">Import .xlsx</a>
+      <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('export_order', order_id=order.id) }}">Export CSV</a>
+      {% if not order.closed and not order.saved_for_later %}
+      <form method="post" action="{{ url_for('save_for_later', order_id=order.id) }}" class="d-inline">
+        <button type="submit" class="btn btn-sm btn-outline-warning">Uložit na později</button>
+      </form>
+      {% endif %}
+      {% if order.closed %}
+      <a class="btn btn-sm btn-outline-info" href="{{ url_for('print_order', order_id=order.id) }}" target="_blank">Tisk</a>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if order.imported_files %}
+  <div class="alert alert-info">
+    <strong>Importované soubory:</strong>
+    {% for file in order.imported_files %}
+      {{ file.filename }} ({{ file.rows_imported }} palet, {{ file.uploaded_at.strftime('%d.%m.%Y %H:%M') }}){% if not loop.last %}, {% endif %}
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <div class="row">
+    <div class="col-md-7">
+      <div class="d-flex justify-content-between align-items-center mb-3">
+        <h4>Palety v zakázce</h4>
+        <form style="display:inline" action="{{ url_for('auto_assign_route', order_id=order.id) }}" method="post">
+          <button type="submit" class="btn btn-sm btn-outline-success">🚛 Auto přiřadit + optimalizovat lanes</button>
+        </form>
+      </div>
+      <table class="table table-sm">
+        <thead><tr><th>Datum</th><th>Označení</th><th>LSA</th><th>Text</th><th>len(m)</th><th>Váha(kg)</th><th>Lane</th></tr></thead>
+        <tbody>
+          {% for it in order.items|sort(attribute='import_order') %}
+            <tr class="{% if it.assigned_lane == 1 %}table-primary{% elif it.assigned_lane == 2 %}table-info{% elif it.assigned_lane == 3 %}table-warning{% endif %}">
+              <td><small>{{ it.date_received or '' }}</small></td>
+              <td><small>{{ it.lsa_designation or '' }}</small></td>
+              <td>{{ it.lsa }}</td>
+              <td style="max-width:200px">{{ it.pallet_text }}</td>
+              <td>{{ '%.2f'|format(it.length_m) }}</td>
+              <td><small>{{ '%.1f'|format(it.weight) }}</small></td>
+              <td>
+                {% if it.assigned_lane %}
+                  <span class="badge bg-secondary">Lane {{ it.assigned_lane }}</span>
+                {% else %}
+                  <span class="text-muted">nezařazeno</span>
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <div class="col-md-5">
+      <h4>Lane přehled</h4>
+      
+      <!-- Celkový přehled kapacity -->
+      {% set total_pallet_places = pallet_places %}
+      {% set max_pallet_capacity = 33 %}
+      {% set capacity_percentage = (total_pallet_places / max_pallet_capacity * 100)|round(1) %}
+      {% set is_overloaded = total_pallet_places > max_pallet_capacity %}
+      
+      <div class="mb-3">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <strong>Paletová místa: {{ '%.1f'|format(total_pallet_places) }} / {{ max_pallet_capacity }} míst</strong>
+          <span class="badge {{ 'bg-danger' if is_overloaded else 'bg-success' if capacity_percentage > 90 else 'bg-warning' if capacity_percentage > 75 else 'bg-primary' }}">
+            {{ capacity_percentage }}%
+          </span>
+        </div>
+        
+        <!-- Vizuální indikátor kapacity - obdélník kamion -->
+        <div class="border rounded p-2 bg-light capacity-truck-container">
+          <div class="capacity-fill-bar" 
+               data-percentage="{{ [capacity_percentage, 100]|min }}"
+               data-is-overloaded="{{ 'true' if is_overloaded else 'false' }}"
+               data-capacity-state="{{ 'danger' if is_overloaded else 'success' if capacity_percentage <= 100 else 'warning' }}">
+          </div>
+          {% if is_overloaded %}
+            <div class="capacity-overflow-bar" 
+                 data-overflow-width="{{ capacity_percentage - 100 }}">
+            </div>
+          {% endif %}
+        </div>
+        
+        <style>
+          .capacity-truck-container {
+            position: relative;
+            height: 40px;
+          }
+          .capacity-fill-bar {
+            height: 100%;
+            border-radius: 0.375rem;
+            transition: width 0.3s ease;
+          }
+          .capacity-fill-bar[data-capacity-state="success"] {
+            background-color: #198754;
+          }
+          .capacity-fill-bar[data-capacity-state="warning"] {
+            background-color: #ffc107;
+          }
+          .capacity-fill-bar[data-capacity-state="danger"] {
+            background-color: #dc3545;
+          }
+          .capacity-overflow-bar {
+            height: 100%;
+            background-color: #dc3545;
+            opacity: 0.75;
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            border-radius: 0.375rem;
+            background-image: repeating-linear-gradient(45deg, transparent, transparent 5px, rgba(255,255,255,.3) 5px, rgba(255,255,255,.3) 10px);
+          }
+        </style>
+        
+        <script>
+          // Set width based on data attributes
+          document.addEventListener('DOMContentLoaded', function() {
+            const fillBar = document.querySelector('.capacity-fill-bar');
+            if (fillBar) {
+              const percentage = fillBar.getAttribute('data-percentage');
+              fillBar.style.width = percentage + '%';
+            }
+            
+            const overflowBar = document.querySelector('.capacity-overflow-bar');
+            if (overflowBar) {
+              const overflowWidth = overflowBar.getAttribute('data-overflow-width');
+              overflowBar.style.width = overflowWidth + '%';
+            }
+          });
+        </script>
+        <small class="text-muted">🚛 Vizualizace nákladu vozidla (33 paletových míst na 13,6m kamion)</small>
+        
+        {% if is_overloaded %}
+        <div class="alert alert-danger mt-2 py-2">
+          <i class="fas fa-exclamation-triangle"></i> <strong>Varování!</strong> 
+          Překročena kapacita vozidla o {{ '%.1f'|format(total_pallet_places - max_pallet_capacity) }} paletových míst!
+        </div>
+        {% endif %}
+      </div>
+      
+      <div class="lane-summary lane-1">
+        <h5>Lane 1 <small class="text-muted">(modrá)</small></h5>
+        <p class="mb-1"><strong>{{ '%.2f'|format(lane_totals[1]) }} m</strong></p>
+        <small>{{ order.items|selectattr('assigned_lane', 'equalto', 1)|list|length }} palet</small>
+      </div>
+      
+      <div class="lane-summary lane-2">
+        <h5>Lane 2 <small class="text-muted">(světle modrá)</small></h5>
+        <p class="mb-1"><strong>{{ '%.2f'|format(lane_totals[2]) }} m</strong></p>
+        <small>{{ order.items|selectattr('assigned_lane', 'equalto', 2)|list|length }} palet</small>
+      </div>
+      
+      <div class="lane-summary lane-3">
+        <h5>Lane 3 <small class="text-muted">(žlutá)</small></h5>
+        <p class="mb-1"><strong>{{ '%.2f'|format(lane_totals[3]) }} m</strong></p>
+        <small>{{ order.items|selectattr('assigned_lane', 'equalto', 3)|list|length }} palet</small>
+      </div>
+      <hr />
+      <p>Součet všech lane: {{ '%.2f'|format(lane_totals[1]+lane_totals[2]+lane_totals[3]) }} m</p>
+      <p>Celková váha: <strong>{{ '%.1f'|format(total_weight) }} kg</strong></p>
+      <p>Paletových míst ({{ '%.2f'|format(pallet_places) }}): <strong>{{ price }} Kč</strong> {% if is_full %}<span class="badge bg-warning">Full truck</span>{% endif %}</p>
+
+      <!-- Vizualizace nákladu kamiónu -->
+      <div class="mt-4">
+        <h4>🚛 Vizualizace nákladu <small class="text-muted">(drag & drop pro přeskládání)</small></h4>
+        
+        <div id="truck-visualization" class="border rounded p-3 bg-light" style="max-width: 650px; margin: 0 auto;">
+          <div class="truck-layout">
+            <!-- Hlavičky lanes -->
+            <div class="lane-headers">
+              <div class="lane-header">
+                <span class="badge bg-primary">Lane 1</span>
+                <div class="lane-total">{{ '%.1f'|format(lane_totals[1]) }} m</div>
+              </div>
+              <div class="lane-header">
+                <span class="badge bg-info">Lane 2</span>
+                <div class="lane-total">{{ '%.1f'|format(lane_totals[2]) }} m</div>
+              </div>
+              <div class="lane-header">
+                <span class="badge bg-warning">Lane 3</span>
+                <div class="lane-total">{{ '%.1f'|format(lane_totals[3]) }} m</div>
+              </div>
+            </div>
+
+            <!-- Lanes s paletami -->
+            <div class="truck-lanes">
+              <!-- Lane 1 -->
+              <div class="truck-lane" data-lane="1" ondrop="drop(event)" ondragover="allowDrop(event)">
+                <div class="drop-zone top" data-lane="1" data-position="0" ondrop="dropAtPosition(event)" ondragover="allowDrop(event)"></div>
+                {% for item in order.items|selectattr('assigned_lane', 'equalto', 1)|sort(attribute='import_order') %}
+                <div class="pallet-box" draggable="true" ondragstart="drag(event)" data-item-id="{{ item.id }}" data-lsa="{{ item.lsa }}">
+                  <div class="pallet-length">{{ '%.1f'|format(item.length_m) }}</div>
+                  <div class="pallet-lsa" data-lsa="{{ item.lsa }}">{{ item.lsa }}</div>
+                </div>
+                <div class="drop-zone" data-lane="1" data-position="{{ loop.index }}" ondrop="dropAtPosition(event)" ondragover="allowDrop(event)"></div>
+                {% endfor %}
+                {% if not order.items|selectattr('assigned_lane', 'equalto', 1)|list %}
+                <div class="drop-zone bottom" data-lane="1" data-position="0" ondrop="dropAtPosition(event)" ondragover="allowDrop(event)"></div>
+                {% endif %}
+              </div>
+
+              <!-- Lane 2 -->
+              <div class="truck-lane" data-lane="2" ondrop="drop(event)" ondragover="allowDrop(event)">
+                <div class="drop-zone top" data-lane="2" data-position="0" ondrop="dropAtPosition(event)" ondragover="allowDrop(event)"></div>
+                {% for item in order.items|selectattr('assigned_lane', 'equalto', 2)|sort(attribute='import_order') %}
+                <div class="pallet-box" draggable="true" ondragstart="drag(event)" data-item-id="{{ item.id }}" data-lsa="{{ item.lsa }}">
+                  <div class="pallet-length">{{ '%.1f'|format(item.length_m) }}</div>
+                  <div class="pallet-lsa" data-lsa="{{ item.lsa }}">{{ item.lsa }}</div>
+                </div>
+                <div class="drop-zone" data-lane="2" data-position="{{ loop.index }}" ondrop="dropAtPosition(event)" ondragover="allowDrop(event)"></div>
+                {% endfor %}
+                {% if not order.items|selectattr('assigned_lane', 'equalto', 2)|list %}
+                <div class="drop-zone bottom" data-lane="2" data-position="0" ondrop="dropAtPosition(event)" ondragover="allowDrop(event)"></div>
+                {% endif %}
+              </div>
+
+              <!-- Lane 3 -->
+              <div class="truck-lane" data-lane="3" ondrop="drop(event)" ondragover="allowDrop(event)">
+                <div class="drop-zone top" data-lane="3" data-position="0" ondrop="dropAtPosition(event)" ondragover="allowDrop(event)"></div>
+                {% for item in order.items|selectattr('assigned_lane', 'equalto', 3)|sort(attribute='import_order') %}
+                <div class="pallet-box" draggable="true" ondragstart="drag(event)" data-item-id="{{ item.id }}" data-lsa="{{ item.lsa }}">
+                  <div class="pallet-length">{{ '%.1f'|format(item.length_m) }}</div>
+                  <div class="pallet-lsa" data-lsa="{{ item.lsa }}">{{ item.lsa }}</div>
+                </div>
+                <div class="drop-zone" data-lane="3" data-position="{{ loop.index }}" ondrop="dropAtPosition(event)" ondragover="allowDrop(event)"></div>
+                {% endfor %}
+                {% if not order.items|selectattr('assigned_lane', 'equalto', 3)|list %}
+                <div class="drop-zone bottom" data-lane="3" data-position="0" ondrop="dropAtPosition(event)" ondragover="allowDrop(event)"></div>
+                {% endif %}
+              </div>
+            </div>
+
+            <!-- Nepřiřazené palety -->
+            {% if order.items|selectattr('assigned_lane', 'equalto', 0)|list %}
+            <div class="unassigned-section mt-3">
+              <div class="lane-header">
+                <span class="badge bg-secondary">Nepřiřazené</span>
+              </div>
+              <div class="truck-lane unassigned" data-lane="0" ondrop="drop(event)" ondragover="allowDrop(event)">
+                <div class="drop-zone top" data-lane="0" data-position="0" ondrop="dropAtPosition(event)" ondragover="allowDrop(event)"></div>
+                {% for item in order.items|selectattr('assigned_lane', 'equalto', 0)|sort(attribute='import_order') %}
+                <div class="pallet-box" draggable="true" ondragstart="drag(event)" data-item-id="{{ item.id }}" data-lsa="{{ item.lsa }}">
+                  <div class="pallet-length">{{ '%.1f'|format(item.length_m) }}</div>
+                  <div class="pallet-lsa" data-lsa="{{ item.lsa }}">{{ item.lsa }}</div>
+                </div>
+                <div class="drop-zone" data-lane="0" data-position="{{ loop.index }}" ondrop="dropAtPosition(event)" ondragover="allowDrop(event)"></div>
+                {% endfor %}
+                {% if not order.items|selectattr('assigned_lane', 'equalto', 0)|list %}
+                <div class="drop-zone bottom" data-lane="0" data-position="0" ondrop="dropAtPosition(event)" ondragover="allowDrop(event)"></div>
+                {% endif %}
+              </div>
+            </div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  {% if not order.closed %}
+      <h5>Uzavřít zakázku</h5>
+      <form method="post" action="{{ url_for('close_order') }}">
+        <input type="hidden" name="order_id" value="{{ order.id }}" />
+        
+        <div class="mb-3">
+          <label class="form-label">Jméno dopravce</label>
+          <input type="text" name="carrier_name" class="form-control" placeholder="např. Jiří Novák" required />
+        </div>
+        
+        <div class="mb-3">
+          <label class="form-label">Email dopravce</label>
+          <input type="email" name="carrier_email" class="form-control" placeholder="dopravce@example.com" />
+        </div>
+        
+        <div class="mb-3">
+          <label class="form-label">Datum a čas nakládky</label>
+          <input type="datetime-local" name="pickup_datetime" class="form-control" required />
+        </div>
+        
+        <div class="mb-3">
+          <label class="form-label">Poznávací značka kamionu</label>
+          <input type="text" name="truck_license_plate" class="form-control" placeholder="např. 1A2 3456" required />
+        </div>
+        
+        <div class="mb-3">
+          <label class="form-label">Email adresy pro nakládku <small class="text-muted">(oddělené čárkami)</small></label>
+          <input type="text" name="loading_emails" class="form-control" placeholder="loading1@bad-zwisenhahn.com, loading2@bad-zwisenhahn.com" />
+        </div>
+        
+        <div class="d-flex gap-2">
+          <button type="submit" class="btn btn-success">Uzavřít zakázku</button>
+        </div>
+      </form>
+      
+      <form method="post" action="{{ url_for('save_for_later', order_id=order.id) }}" class="mt-3">
+        <button type="submit" class="btn btn-outline-warning">Uložit na později</button>
+      </form>
+      {% else %}
+      <div class="alert alert-success">
+        <h5>Zakázka uzavřena</h5>
+        <p><strong>Dopravce:</strong> {{ order.carrier_name or 'neuvedeno' }}</p>
+        <p><strong>Email dopravce:</strong> {{ order.carrier_email or 'neuvedeno' }}</p>
+        <p><strong>Nakládka:</strong> {{ order.pickup_datetime.strftime('%d.%m.%Y %H:%M') if order.pickup_datetime else 'neuvedeno' }}</p>
+        <p><strong>Kamion:</strong> {{ order.truck_license_plate or 'neuvedeno' }}</p>
+        {% if order.loading_emails %}
+          {% set loading_emails_list = order.loading_emails|from_json %}
+          <p><strong>Email adresy nakládky:</strong> {{ loading_emails_list|join(', ') }}</p>
+        {% endif %}
+      </div>
+      
+      <!-- Email funkce pro uzavřené zakázky -->
+      <div class="card mt-3">
+        <div class="card-header">
+          <h6>📧 Odesílání emailů</h6>
+        </div>
+        <div class="card-body">
+          <div class="row">
+            <div class="col-md-6">
+              <h6>Email pro dopravce</h6>
+              <p class="small text-muted">Předmět: Kódy k nakládce ({{ order.pickup_datetime.strftime('%d.%m.%Y') if order.pickup_datetime else 'TBD' }})</p>
+              {% if order.carrier_email and order.pickup_datetime %}
+                <button type="button" class="btn btn-outline-primary btn-sm" data-action="send-carrier" data-order-id="{{ order.id }}">
+                  📩 Odeslat dopravci
+                </button>
+              {% else %}
+                <p class="text-muted small">Email dopravce nebo datum nakládky není vyplněno</p>
+              {% endif %}
+            </div>
+            <div class="col-md-6">
+              <h6>Email pro nakládku</h6>
+              <p class="small text-muted">Předmět: Aviso ({{ order.pickup_datetime.strftime('%d.%m.%Y') if order.pickup_datetime else 'TBD' }})</p>
+              {% if order.pickup_datetime %}
+                <div class="mb-2">
+                  <label class="form-label small">Dodatečný text (nepovinné):</label>
+                  <input type="text" id="additionalText" class="form-control form-control-sm" placeholder="Dodatečné informace...">
+                </div>
+                <button type="button" class="btn btn-outline-success btn-sm" data-action="send-loading" data-order-id="{{ order.id }}">
+                  📋 Odeslat na nakládku
+                </button>
+              {% else %}
+                <p class="text-muted small">Datum nakládky není vyplněno</p>
+              {% endif %}
+            </div>
+          </div>
+          
+          <!-- Formulář pro aktualizaci email adres -->
+          <hr>
+          <h6>Aktualizace email adres</h6>
+          <form method="post" action="{{ url_for('update_order_emails', order_id=order.id) }}">
+            <div class="row">
+              <div class="col-md-6">
+                <label class="form-label small">Email dopravce:</label>
+                <input type="email" name="carrier_email" class="form-control form-control-sm" value="{{ order.carrier_email or '' }}" placeholder="dopravce@example.com">
+              </div>
+              <div class="col-md-6">
+                <label class="form-label small">Email adresy nakládky (oddělené čárkami):</label>
+                <input type="text" name="loading_emails" class="form-control form-control-sm" 
+                       value="{% if order.loading_emails %}{{ (order.loading_emails|from_json)|join(', ') }}{% endif %}" 
+                       placeholder="loading1@example.com, loading2@example.com">
+              </div>
+            </div>
+            <button type="submit" class="btn btn-sm btn-outline-secondary mt-2">Aktualizovat adresy</button>
+          </form>
+        </div>
+      </div>
+      {% endif %}
+
+      <hr />
+      <h5>Odstranit celé LSA</h5>
+      <form method="post" action="{{ url_for('remove_lsa') }}">
+        <input type="hidden" name="order_id" value="{{ order.id }}" />
+        <div class="input-group">
+          <select name="lsa" class="form-select">
+            {% for l in order.items|map(attribute='lsa')|unique %}
+              <option value="{{ l }}">{{ l }}</option>
+            {% endfor %}
+          </select>
+          <button class="btn btn-danger">Odstranit LSA</button>
+        </div>
+      </form>
+
+    </div>
+  </div>
+
+<style>
+/* Styly pro tabulkovou vizualizaci kamionu */
+.truck-layout {
+  background: white;
+  border-radius: 8px;
+  overflow: hidden;
+  max-width: 600px;  /* Omezení šířky pro kompaktnost */
+  margin: 0 auto;    /* Centrování */
+}
+
+.lane-headers {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 1px;
+  background: #dee2e6;
+  padding: 1px;
+}
+
+.lane-header {
+  background: white;
+  padding: 8px;      /* Zmenšeno z 10px */
+  text-align: center;
+  border-bottom: 2px solid #dee2e6;
+}
+
+.lane-header .badge {
+  display: block;
+  margin-bottom: 5px;
+  font-size: 0.8em;  /* Menší font */
+}
+
+.lane-total {
+  font-weight: bold;
+  font-size: 1.0em;  /* Zmenšeno z 1.1em */
+  color: #495057;
+}
+
+.truck-lanes {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 1px;
+  background: #dee2e6;
+  min-height: 180px;  /* Zmenšeno z 200px */
+}
+
+.truck-lane {
+  background: white;
+  padding: 8px;      /* Zmenšeno z 10px */
+  min-height: 160px; /* Zmenšeno z 180px */
+  border-right: 1px solid #dee2e6;
+  transition: all 0.3s ease;
+  display: flex;
+  flex-direction: column;
+  align-items: center; /* Centrování palet v lanes */
+  position: relative;
+}
+
+.truck-lane:last-child {
+  border-right: none;
+}
+
+.truck-lane.drag-over {
+  background-color: #e3f2fd !important;
+  border-color: #2196f3;
+  box-shadow: inset 0 0 10px rgba(33, 150, 243, 0.2);
+}
+
+.truck-lane.can-drop {
+  background-color: #f0f8ff;
+  border: 2px dashed #007bff;
+}
+
+.truck-lane.unassigned {
+  background: #f8f9fa;
+  border: 2px dashed #6c757d;
+  border-radius: 4px;
+  margin-top: 10px;
+}
+
+.truck-lane.unassigned.drag-over {
+  background-color: #fff3cd;
+  border-color: #ffc107;
+}
+
+.pallet-box {
+  display: inline-block;
+  width: 70px;  /* Zmenšeno z 80px pro kompaktnost */
+  height: 55px; 
+  margin: 3px;  /* Zmenšeno z 5px */
+  background: white;
+  border: 2px solid #28a745;
+  border-radius: 4px;
+  text-align: center;
+  cursor: grab;
+  transition: all 0.3s ease;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  position: relative;
+  user-select: none;
+}
+
+.pallet-box:hover {
+  transform: translateY(-3px) scale(1.05);
+  box-shadow: 0 6px 16px rgba(0,0,0,0.25);
+  border-color: #20c997;
+  z-index: 10;
+}
+
+.pallet-box:active {
+  cursor: grabbing;
+}
+
+.pallet-box.dragging {
+  opacity: 0.7;
+  transform: rotate(8deg) scale(1.1);
+  z-index: 1000;
+  box-shadow: 0 8px 25px rgba(0,0,0,0.4);
+  border-color: #007bff;
+  filter: brightness(1.1);
+}
+
+.pallet-box.ghost {
+  opacity: 0.3;
+  transform: scale(0.9);
+  border-style: dashed;
+}
+
+.pallet-box.selected {
+  border-color: #007bff !important;
+  border-width: 3px !important;
+  box-shadow: 0 0 15px rgba(0, 123, 255, 0.5) !important;
+  z-index: 100 !important;
+}
+
+.pallet-length {
+  background: #28a745;
+  color: white;
+  font-weight: bold;
+  font-size: 0.9em;
+  padding: 5px 2px;  /* Více paddingu */
+  border-radius: 2px 2px 0 0;
+  line-height: 1.1;
+  height: 28px;      /* Definovaná výška pro délku sekci */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pallet-lsa {
+  font-weight: bold;
+  font-size: 0.8em;  /* Mírně zvětšeno z 0.75em */
+  padding: 3px 2px;  /* Více paddingu */
+  line-height: 1.1;  /* Lepší řádkování */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  height: 25px;      /* Definovaná výška pro LSA sekci */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0 0 2px 2px; /* Zaoblení dolních rohů */
+  color: white; /* Bílý text pro všechny LSA */
+}
+
+/* Drop zones pro přesné umístění - vylepšené */
+.drop-zone {
+  width: 100%;
+  height: 20px;
+  background: transparent;
+  border: 2px dashed transparent;
+  margin: 2px 0;
+  transition: all 0.3s ease;
+  border-radius: 6px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transform: scaleY(0.3);
+}
+
+.drop-zone:before {
+  content: "⬇ Přetáhněte sem ⬇";
+  font-size: 10px;
+  color: #007bff;
+  font-weight: bold;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.drop-zone.drag-over {
+  border-color: #007bff;
+  background-color: rgba(0, 123, 255, 0.15);
+  opacity: 1;
+  transform: scaleY(1);
+  height: 35px;
+  box-shadow: 0 2px 8px rgba(0, 123, 255, 0.3);
+}
+
+.drop-zone.drag-over:before {
+  opacity: 1;
+}
+
+/* Zobrazit drop zóny během drag operace */
+.dragging-active .drop-zone {
+  opacity: 0.6;
+  transform: scaleY(0.8);
+  border-color: #dee2e6;
+  background-color: rgba(222, 226, 230, 0.1);
+}
+
+.drop-zone.top {
+  margin-bottom: 5px;
+}
+
+.drop-zone.bottom {
+  margin-top: 5px;
+}
+
+.unassigned-section .pallet-box {
+  border-color: #6c757d;
+}
+
+.unassigned-section .pallet-length {
+  background: #6c757d;
+}
+
+/* Animace pro lane totals */
+.lane-total.updated {
+  color: #28a745;
+  transform: scale(1.1);
+  transition: all 0.3s;
+}
+
+/* Animace pro vylepšené UX */
+@keyframes pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+  100% { transform: scale(1); }
+}
+
+@keyframes slideIn {
+  from { 
+    opacity: 0; 
+    transform: translateX(-50%) translateY(-20px); 
+  }
+  to { 
+    opacity: 1; 
+    transform: translateX(-50%) translateY(0); 
+  }
+}
+
+@keyframes slideOut {
+  from { 
+    opacity: 1; 
+    transform: translateX(-50%) translateY(0); 
+  }
+  to { 
+    opacity: 0; 
+    transform: translateX(-50%) translateY(-20px); 
+  }
+}
+
+/* Loading spinner */
+.loading-spinner {
+  animation: pulse 1s infinite;
+}
+
+/* Touch support styly */
+@media (hover: none) and (pointer: coarse) {
+  .pallet-box {
+    cursor: pointer;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  
+  .drop-zone {
+    height: 30px;
+    opacity: 0.3;
+    border-color: #dee2e6;
+    background-color: rgba(222, 226, 230, 0.1);
+  }
+  
+  .drop-zone:before {
+    content: "📱 Dotkněte se";
+    font-size: 12px;
+    opacity: 0.7;
+  }
+  
+  .dragging-active .drop-zone {
+    opacity: 1;
+    transform: scaleY(1);
+    border-color: #007bff;
+    background-color: rgba(0, 123, 255, 0.2);
+  }
+}
+
+/* Responzivní vylepšení */
+@media (max-width: 768px) {
+  .pallet-box {
+    width: 65px;
+    height: 50px;
+    margin: 2px;
+  }
+  
+  .pallet-length {
+    height: 25px;
+    font-size: 0.8em;
+    padding: 3px 1px;
+  }
+  
+  .pallet-lsa {
+    height: 23px;
+    font-size: 0.7em;
+    padding: 2px 1px;
+  }
+  
+  .drop-zone {
+    height: 25px;
+  }
+  
+  .drop-zone:before {
+    font-size: 9px;
+  }
+  
+  .truck-lane {
+    padding: 6px;
+    min-height: 140px;
+  }
+}
+
+/* Klávesové zkratky indikátor */
+.keyboard-hint {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  background: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 8px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  opacity: 0;
+  transition: opacity 0.3s;
+  z-index: 1000;
+  pointer-events: none;
+}
+
+.keyboard-hint.show {
+  opacity: 1;
+}
+
+/* Lepší focus indikátory */
+.pallet-box:focus {
+  outline: 3px solid #007bff;
+  outline-offset: 2px;
+}
+
+.drop-zone:focus {
+  outline: 2px solid #28a745;
+  outline-offset: 1px;
+}
+</style>
+
+<script>
+// LSA Color Generator (stejný algoritmus jako na serveru)
+function getLSAColor(lsaCode) {
+    if (!lsaCode) return '#6c757d';
+    
+    // Hash LSA kódu pro konzistentní barvy
+    let hash = 0;
+    for (let i = 0; i < lsaCode.length; i++) {
+        const char = lsaCode.charCodeAt(i);
+        hash = ((hash << 5) - hash) + char;
+        hash = hash & hash; // Convert to 32bit integer
+    }
+    
+    // Převod na HSL pro lepší čitelnost
+    const hue = Math.abs(hash) % 360;
+    const saturation = 70;  // 70% saturace
+    const lightness = 45;   // 45% světlost
+    
+    return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+}
+
+// Inicializace barev LSA při načtení stránky
+document.addEventListener('DOMContentLoaded', function() {
+    const lsaElements = document.querySelectorAll('[data-lsa]');
+    lsaElements.forEach(element => {
+        const lsaCode = element.getAttribute('data-lsa');
+        if (element.classList.contains('pallet-lsa')) {
+            element.style.backgroundColor = getLSAColor(lsaCode);
+        }
+    });
+});
+
+// Drag & Drop funkcionalita s vylepšeným UX
+let draggedElement = null;
+let originalParent = null;
+let isActive = false;
+
+function allowDrop(ev) {
+    ev.preventDefault();
+    const dropZone = ev.currentTarget;
+    
+    if (!dropZone.classList.contains('drag-over')) {
+        dropZone.classList.add('drag-over');
+        
+        // Přidat pulzující animaci
+        dropZone.style.animation = 'pulse 1s infinite';
+    }
+}
+
+function drag(ev) {
+    draggedElement = ev.target.closest('.pallet-box');
+    originalParent = draggedElement.parentElement;
+    
+    // Aktivovat drag mode pro celý kontejner
+    document.getElementById('truck-visualization').classList.add('dragging-active');
+    
+    draggedElement.classList.add('dragging');
+    
+    // Vytvořit ghost element
+    const ghost = draggedElement.cloneNode(true);
+    ghost.classList.add('ghost');
+    ghost.classList.remove('dragging');
+    originalParent.insertBefore(ghost, draggedElement.nextSibling);
+    
+    ev.dataTransfer.setData("text/plain", draggedElement.dataset.itemId);
+    ev.dataTransfer.effectAllowed = "move";
+    
+    isActive = true;
+}
+
+function drop(ev) {
+    ev.preventDefault();
+    cleanupDragVisuals(ev.currentTarget);
+    
+    if (draggedElement && ev.currentTarget.classList.contains('truck-lane')) {
+        const itemId = ev.dataTransfer.getData("text/plain");
+        const newLane = ev.currentTarget.dataset.lane;
+        
+        // Vizuální feedback před API voláním
+        showDropSuccess(ev.currentTarget);
+        
+        // Přesun na konec lane s optimistickým UI
+        movePallet(itemId, newLane, -1, true);
+    }
+    
+    resetDragState();
+}
+
+function dropAtPosition(ev) {
+    ev.preventDefault();
+    cleanupDragVisuals(ev.currentTarget);
+    
+    if (draggedElement) {
+        const itemId = ev.dataTransfer.getData("text/plain");
+        const newLane = ev.currentTarget.dataset.lane;
+        const position = parseInt(ev.currentTarget.dataset.position);
+        
+        // Vizuální feedback
+        showDropSuccess(ev.currentTarget);
+        
+        // Přesun na konkrétní pozici s optimistickým UI
+        movePallet(itemId, newLane, position, true);
+    }
+    
+    resetDragState();
+}
+
+function showDropSuccess(element) {
+    element.style.backgroundColor = '#d4edda';
+    element.style.borderColor = '#28a745';
+    setTimeout(() => {
+        element.style.backgroundColor = '';
+        element.style.borderColor = '';
+    }, 1000);
+}
+
+function cleanupDragVisuals(currentTarget) {
+    currentTarget.classList.remove('drag-over');
+    currentTarget.style.animation = '';
+}
+
+function resetDragState() {
+    if (draggedElement) {
+        draggedElement.classList.remove('dragging');
+        draggedElement = null;
+    }
+    
+    // Odebrat ghost elements
+    document.querySelectorAll('.ghost').forEach(ghost => ghost.remove());
+    
+    document.getElementById('truck-visualization').classList.remove('dragging-active');
+    document.querySelectorAll('.truck-lane, .drop-zone').forEach(element => {
+        element.classList.remove('drag-over', 'can-drop');
+        element.style.animation = '';
+    });
+    
+    isActive = false;
+}
+
+// Vylepšené event listeners
+document.addEventListener('dragleave', function(ev) {
+    if (ev.target.classList.contains('truck-lane') || ev.target.classList.contains('drop-zone')) {
+        ev.target.classList.remove('drag-over');
+        ev.target.style.animation = '';
+    }
+});
+
+document.addEventListener('dragend', function(ev) {
+    resetDragState();
+});
+
+// Přidání hover efektů a touch podpory
+document.addEventListener('DOMContentLoaded', function() {
+    const pallets = document.querySelectorAll('.pallet-box');
+    const keyboardHint = createKeyboardHint();
+    let selectedPallet = null;
+    let touchStartTime = 0;
+    let touchMoved = false;
+    
+    // Inicializace LSA barev a event listeners
+    initializeLSAColors();
+    initializePalletInteractions();
+    initializeKeyboardSupport();
+    initializeTouchSupport();
+    initializeEmailButtons();
+    
+    function initializeEmailButtons() {
+        // Email tlačítka
+        document.addEventListener('click', function(e) {
+            if (e.target.dataset.action === 'send-carrier') {
+                const orderId = e.target.dataset.orderId;
+                sendCarrierEmail(orderId);
+            } else if (e.target.dataset.action === 'send-loading') {
+                const orderId = e.target.dataset.orderId;
+                sendLoadingEmail(orderId);
+            }
+        });
+    }
+    
+    function initializeLSAColors() {
+        const lsaElements = document.querySelectorAll('[data-lsa]');
+        lsaElements.forEach(element => {
+            const lsaCode = element.getAttribute('data-lsa');
+            if (element.classList.contains('pallet-lsa')) {
+                element.style.backgroundColor = getLSAColor(lsaCode);
+            }
+        });
+    }
+    
+    function initializePalletInteractions() {
+        pallets.forEach(pallet => {
+            // Mouse events
+            pallet.addEventListener('mouseenter', function() {
+                if (!isActive) {
+                    this.style.transform = 'translateY(-3px) scale(1.05)';
+                    this.title = `LSA: ${this.dataset.lsa} | Přetáhněte pro přemístění nebo použijte klávesy (1,2,3)`;
+                }
+            });
+            
+            pallet.addEventListener('mouseleave', function() {
+                if (!isActive && !this.classList.contains('selected')) {
+                    this.style.transform = '';
+                }
+            });
+            
+            // Click selection pro klávesnice
+            pallet.addEventListener('click', function() {
+                selectPallet(this);
+            });
+            
+            // Touch events pro mobilní zařízení
+            pallet.addEventListener('touchstart', handleTouchStart);
+            pallet.addEventListener('touchmove', handleTouchMove);
+            pallet.addEventListener('touchend', handleTouchEnd);
+            
+            // Přístupnost
+            pallet.setAttribute('tabindex', '0');
+            pallet.setAttribute('role', 'button');
+            pallet.setAttribute('aria-label', `Paleta ${pallet.dataset.lsa}, přesunutelná`);
+        });
+    }
+    
+    function initializeKeyboardSupport() {
+        document.addEventListener('keydown', function(e) {
+            if (selectedPallet) {
+                keyboardHint.classList.add('show');
+                
+                if (e.key >= '1' && e.key <= '3') {
+                    const targetLane = e.key;
+                    const itemId = selectedPallet.dataset.itemId;
+                    
+                    // Vizuální feedback
+                    selectedPallet.style.transform = 'scale(0.8)';
+                    setTimeout(() => {
+                        movePallet(itemId, targetLane, -1, true);
+                        deselectPallet();
+                    }, 200);
+                } else if (e.key === 'Escape') {
+                    deselectPallet();
+                } else if (e.key === '0') {
+                    // Přesun do nepřiřazených
+                    const itemId = selectedPallet.dataset.itemId;
+                    movePallet(itemId, '0', -1, true);
+                    deselectPallet();
+                }
+                
+                setTimeout(() => keyboardHint.classList.remove('show'), 3000);
+            }
+        });
+    }
+    
+    function initializeTouchSupport() {
+        // Touch drag & drop
+        document.querySelectorAll('.truck-lane, .drop-zone').forEach(zone => {
+            zone.addEventListener('touchstart', function(e) {
+                e.preventDefault();
+                this.classList.add('can-drop');
+            });
+            
+            zone.addEventListener('touchend', function(e) {
+                e.preventDefault();
+                this.classList.remove('can-drop');
+                
+                if (selectedPallet && this.classList.contains('drop-zone')) {
+                    const itemId = selectedPallet.dataset.itemId;
+                    const newLane = this.dataset.lane;
+                    const position = parseInt(this.dataset.position);
+                    
+                    movePallet(itemId, newLane, position, true);
+                    deselectPallet();
+                }
+            });
+        });
+    }
+    
+    function handleTouchStart(e) {
+        touchStartTime = Date.now();
+        touchMoved = false;
+        
+        // Dlouhý dotek = výběr
+        setTimeout(() => {
+            if (!touchMoved && selectedPallet !== this) {
+                selectPallet(this);
+                navigator.vibrate && navigator.vibrate(50); // Haptický feedback
+            }
+        }, 500);
+    }
+    
+    function handleTouchMove(e) {
+        touchMoved = true;
+    }
+    
+    function handleTouchEnd(e) {
+        const touchDuration = Date.now() - touchStartTime;
+        
+        if (!touchMoved && touchDuration < 500) {
+            // Krátký dotek = rychlý výběr
+            selectPallet(this);
+        }
+    }
+    
+    function selectPallet(pallet) {
+        // Deselect předchozí
+        if (selectedPallet) {
+            selectedPallet.classList.remove('selected');
+            selectedPallet.style.border = '';
+            selectedPallet.style.transform = '';
+        }
+        
+        // Select nový
+        selectedPallet = pallet;
+        selectedPallet.classList.add('selected');
+        selectedPallet.style.border = '3px solid #007bff';
+        selectedPallet.style.transform = 'scale(1.1)';
+        selectedPallet.style.zIndex = '100';
+        
+        // Zobrazit nápovědu
+        keyboardHint.classList.add('show');
+        setTimeout(() => keyboardHint.classList.remove('show'), 5000);
+        
+        // Zvýraznit možné drop zóny
+        document.querySelectorAll('.drop-zone').forEach(zone => {
+            zone.style.opacity = '1';
+            zone.style.transform = 'scaleY(1)';
+        });
+    }
+    
+    function deselectPallet() {
+        if (selectedPallet) {
+            selectedPallet.classList.remove('selected');
+            selectedPallet.style.border = '';
+            selectedPallet.style.transform = '';
+            selectedPallet.style.zIndex = '';
+            selectedPallet = null;
+        }
+        
+        keyboardHint.classList.remove('show');
+        
+        // Skrýt drop zóny
+        document.querySelectorAll('.drop-zone').forEach(zone => {
+            zone.style.opacity = '';
+            zone.style.transform = '';
+        });
+    }
+    
+    function createKeyboardHint() {
+        const hint = document.createElement('div');
+        hint.className = 'keyboard-hint';
+        hint.innerHTML = `
+            🎯 <strong>Klávesy:</strong><br>
+            1, 2, 3 = Přesun do Lane<br>
+            0 = Nepřiřazené<br>
+            ESC = Zrušit výběr
+        `;
+        document.body.appendChild(hint);
+        return hint;
+    }
+});
+
+// Optimalizovaný API endpoint pro přesun s lepší UX
+function movePallet(itemId, newLane, position, optimistic = false) {
+    // Loading indikátor
+    const loadingSpinner = document.createElement('div');
+    loadingSpinner.className = 'loading-spinner';
+    loadingSpinner.innerHTML = '⏳';
+    loadingSpinner.style.cssText = 'position: fixed; top: 20px; right: 20px; background: #007bff; color: white; padding: 8px 12px; border-radius: 4px; z-index: 9999; font-size: 14px;';
+    document.body.appendChild(loadingSpinner);
+    
+    // Optimistické UI - okamžitě přesunout element
+    if (optimistic && draggedElement) {
+        const targetLane = document.querySelector(`[data-lane="${newLane}"]`);
+        if (targetLane && targetLane.classList.contains('truck-lane')) {
+            const clonedElement = draggedElement.cloneNode(true);
+            clonedElement.classList.remove('dragging');
+            clonedElement.style.opacity = '0.7';
+            clonedElement.style.filter = 'grayscale(50%)';
+            
+            if (position === -1 || position >= targetLane.children.length) {
+                targetLane.appendChild(clonedElement);
+            } else {
+                const dropZones = targetLane.querySelectorAll('.drop-zone');
+                if (dropZones[position]) {
+                    targetLane.insertBefore(clonedElement, dropZones[position]);
+                }
+            }
+            
+            // Skrýt originální element
+            draggedElement.style.opacity = '0.3';
+        }
+    }
+
+    fetch('/move_pallet_position', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            item_id: itemId,
+            new_lane: parseInt(newLane),
+            position: position
+        })
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+        return response.json();
+    })
+    .then(data => {
+        document.body.removeChild(loadingSpinner);
+        
+        if (data.success) {
+            // Úspěch - rychlé obnovení pouze potřebných částí
+            updateLaneTotals(data.lane_totals);
+            showSuccessMessage('Paleta úspěšně přesunuta!');
+            
+            // Plné obnovení až po krátké době
+            setTimeout(() => {
+                location.reload();
+            }, 1500);
+        } else {
+            throw new Error(data.error || 'Neznámá chyba');
+        }
+    })
+    .catch(error => {
+        document.body.removeChild(loadingSpinner);
+        console.error('Error:', error);
+        
+        // Fallback na starý endpoint
+        fetch('/move_pallet', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                item_id: itemId,
+                new_lane: parseInt(newLane)
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showSuccessMessage('Paleta přesunuta (fallback)');
+                setTimeout(() => location.reload(), 1000);
+            } else {
+                showErrorMessage('Chyba při přesunu: ' + (data.error || 'Neznámá chyba'));
+                location.reload();
+            }
+        })
+        .catch(fallbackError => {
+            console.error('Fallback error:', fallbackError);
+            showErrorMessage('Chyba při přesunu palety. Stránka bude obnovena.');
+            setTimeout(() => location.reload(), 2000);
+        });
+    });
+}
+
+function updateLaneTotals(laneTotals) {
+    if (!laneTotals) return;
+    
+    Object.keys(laneTotals).forEach(lane => {
+        const laneTotal = document.querySelector(`.lane-summary.lane-${lane} p strong`);
+        if (laneTotal) {
+            laneTotal.textContent = `${laneTotals[lane].toFixed(2)} m`;
+            animateUpdate(laneTotal.parentElement);
+        }
+    });
+}
+
+function showSuccessMessage(message) {
+    showMessage(message, 'success');
+}
+
+function showErrorMessage(message) {
+    showMessage(message, 'error');
+}
+
+function showMessage(message, type) {
+    const messageDiv = document.createElement('div');
+    messageDiv.className = `alert alert-${type === 'error' ? 'danger' : 'success'} message-popup`;
+    messageDiv.innerHTML = `
+        <i class="fas fa-${type === 'error' ? 'exclamation-triangle' : 'check-circle'}"></i>
+        ${message}
+    `;
+    messageDiv.style.cssText = `
+        position: fixed; 
+        top: 20px; 
+        left: 50%; 
+        transform: translateX(-50%); 
+        z-index: 9999; 
+        min-width: 300px;
+        text-align: center;
+        animation: slideIn 0.3s ease;
+    `;
+    
+    document.body.appendChild(messageDiv);
+    
+    setTimeout(() => {
+        messageDiv.style.animation = 'slideOut 0.3s ease';
+        setTimeout(() => {
+            if (messageDiv.parentElement) {
+                document.body.removeChild(messageDiv);
+            }
+        }, 300);
+    }, 3000);
+}
+
+// Animace pro aktualizované hodnoty
+function animateUpdate(element) {
+    element.classList.add('updated');
+    setTimeout(() => {
+        element.classList.remove('updated');
+    }, 1000);
+}
+
+// Email funkce
+function sendCarrierEmail(orderId) {
+    if (!confirm('Opravdu chcete odeslat email dopravci?')) return;
+    
+    const button = event.target;
+    const originalText = button.innerHTML;
+    button.innerHTML = '⏳ Odesílám...';
+    button.disabled = true;
+    
+    fetch(`/send_carrier_email/${orderId}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showSuccessMessage(data.message);
+        } else {
+            showErrorMessage(data.error);
+        }
+    })
+    .catch(error => {
+        showErrorMessage('Chyba při odesílání emailu: ' + error);
+    })
+    .finally(() => {
+        button.innerHTML = originalText;
+        button.disabled = false;
+    });
+}
+
+function sendLoadingEmail(orderId) {
+    if (!confirm('Opravdu chcete odeslat email na nakládku?')) return;
+    
+    const button = event.target;
+    const originalText = button.innerHTML;
+    const additionalText = document.getElementById('additionalText').value;
+    
+    button.innerHTML = '⏳ Odesílám...';
+    button.disabled = true;
+    
+    fetch(`/send_loading_email/${orderId}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            additional_text: additionalText
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showSuccessMessage(data.message);
+            document.getElementById('additionalText').value = ''; // Vyčistit pole
+        } else {
+            showErrorMessage(data.error);
+        }
+    })
+    .catch(error => {
+        showErrorMessage('Chyba při odesílání emailu: ' + error);
+    })
+    .finally(() => {
+        button.innerHTML = originalText;
+        button.disabled = false;
+    });
+}
+</script>
+
+{% endblock %}

@@ -1076,11 +1076,3 @@ if __name__ == '__main__':
     else:
         print("Starting Flask application in PRODUCTION mode")
         app.run(debug=False, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
-
-# Initialize database when imported (for WSGI)
-try:
-    with app.app_context():
-        init_db()
-    print("Database initialized successfully for WSGI!")
-except Exception as e:
-    print(f"Database initialization error: {e}")
