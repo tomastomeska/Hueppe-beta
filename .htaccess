@@ -1,10 +1,10 @@
-# .htaccess pro Wedos Python aplikaci
+# .htaccess pro Wedos Python aplikaci v podsložce /hueppe/
 RewriteEngine On
 
-# Redirect all requests to Python WSGI application
+# Redirect all requests to Python WSGI application in subfolder
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
-RewriteRule ^(.*)$ /wsgi.py/$1 [QSA,L]
+RewriteRule ^(.*)$ wsgi.py/$1 [QSA,L]
 
 # Security headers
 Header always set X-Content-Type-Options nosniff

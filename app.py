@@ -60,6 +60,7 @@ class Order(db.Model):
     # Email addresses
     carrier_email = db.Column(db.String(120))
     loading_emails = db.Column(db.Text)  # JSON string pro více emailů
+    user_email = db.Column(db.String(120))  # Email uživatele pro Reply-To
 
     def __repr__(self):
         return f'<Order {self.id} {self.name}>'
@@ -198,18 +199,25 @@ def calculate_file_hash(file_content):
     """Calculate SHA256 hash of file content"""
     return hashlib.sha256(file_content).hexdigest()
 
-def send_email(to_emails, subject, body, html_body=None):
+def send_email(to_emails, subject, body, html_body=None, sender_email=None, reply_to=None):
     """Odešle email pomocí SMTP konfigurace nebo lokálního sendmail"""
     try:
         smtp_config = SETTINGS.get('smtp', {})
         
-        # Nastavení odesílací adresy
-        from_email = smtp_config.get('from', 'tomeska@european.cz')
+        # Nastavení odesílací adresy (custom nebo výchozí)
+        from_email = sender_email or smtp_config.get('from', 'tomeska@european.cz')
         
         # Vytvoření emailu
         msg = MIMEMultipart('alternative')
         msg['From'] = from_email
         msg['Subject'] = subject
+        
+        # Nastavení Reply-To pokud je specifikované
+        if reply_to:
+            msg['Reply-To'] = reply_to
+        elif sender_email and sender_email != from_email:
+            # Pokud je custom sender, nastavit jako Reply-To
+            msg['Reply-To'] = sender_email
         
         # Přidání textové části
         text_part = MIMEText(body, 'plain', 'utf-8')
@@ -1012,7 +1020,13 @@ def send_carrier_email(order_id):
         subject = f"Kódy k nakládce ({pickup_date})"
         body = generate_carrier_email_body(order)
         
-        success, message = send_email(order.carrier_email, subject, body)
+        # Použití uživatelského emailu jako Reply-To
+        success, message = send_email(
+            to_emails=order.carrier_email, 
+            subject=subject, 
+            body=body,
+            reply_to=order.user_email
+        )
         
         if success:
             return jsonify({'success': True, 'message': 'Email byl odeslán dopravci'})
@@ -1054,7 +1068,14 @@ def send_loading_email(order_id):
         
         text_body, html_body = generate_loading_email_body(order, additional_text)
         
-        success, message = send_email(loading_emails, subject, text_body, html_body)
+        # Použití uživatelského emailu jako Reply-To
+        success, message = send_email(
+            to_emails=loading_emails, 
+            subject=subject, 
+            body=text_body, 
+            html_body=html_body,
+            reply_to=order.user_email
+        )
         
         if success:
             return jsonify({'success': True, 'message': f'Email byl odeslán na {len(loading_emails)} adres'})
@@ -1072,6 +1093,7 @@ def update_order_emails(order_id):
     try:
         carrier_email = request.form.get('carrier_email', '').strip()
         loading_emails_text = request.form.get('loading_emails', '').strip()
+        user_email = request.form.get('user_email', '').strip()
         
         # Parsování loading emails
         if loading_emails_text:
@@ -1081,6 +1103,7 @@ def update_order_emails(order_id):
             order.loading_emails = None
         
         order.carrier_email = carrier_email if carrier_email else None
+        order.user_email = user_email if user_email else None
         
         db.session.commit()
         flash('Email adresy byly aktualizovány', 'success')
