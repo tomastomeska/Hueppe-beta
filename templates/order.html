@@ -321,6 +321,9 @@
           {% set loading_emails_list = order.loading_emails|from_json %}
           <p><strong>Email adresy nakládky:</strong> {{ loading_emails_list|join(', ') }}</p>
         {% endif %}
+        {% if order.user_email %}
+          <p><strong>Reply-To email:</strong> {{ order.user_email }}</p>
+        {% endif %}
       </div>
       
       <!-- Email funkce pro uzavřené zakázky -->
@@ -363,15 +366,20 @@
           <h6>Aktualizace email adres</h6>
           <form method="post" action="{{ url_for('update_order_emails', order_id=order.id) }}">
             <div class="row">
-              <div class="col-md-6">
+              <div class="col-md-4">
                 <label class="form-label small">Email dopravce:</label>
                 <input type="email" name="carrier_email" class="form-control form-control-sm" value="{{ order.carrier_email or '' }}" placeholder="dopravce@example.com">
               </div>
-              <div class="col-md-6">
+              <div class="col-md-4">
                 <label class="form-label small">Email adresy nakládky (oddělené čárkami):</label>
                 <input type="text" name="loading_emails" class="form-control form-control-sm" 
                        value="{% if order.loading_emails %}{{ (order.loading_emails|from_json)|join(', ') }}{% endif %}" 
                        placeholder="loading1@example.com, loading2@example.com">
+              </div>
+              <div class="col-md-4">
+                <label class="form-label small">Váš email (Reply-To):</label>
+                <input type="email" name="user_email" class="form-control form-control-sm" value="{{ order.user_email or '' }}" placeholder="vas.email@company.com">
+                <small class="text-muted">Příjemci mohou odpovědět na tento email</small>
               </div>
             </div>
             <button type="submit" class="btn btn-sm btn-outline-secondary mt-2">Aktualizovat adresy</button>
