@@ -52,15 +52,31 @@ pip3 install --user -r requirements.txt
 
 ### 4. Konfigurace emailů
 1. Zkopírujte `settings.example.json` na `settings.json`
-2. Upravte email nastavení:
+2. Pro Wedos hosting (doporučeno - žádné heslo potřeba):
 ```json
 {
-    "smtp_server": "smtp.wedos.net",
-    "smtp_port": 587,
-    "smtp_username": "vas-email@vase-domena.cz",
-    "smtp_password": "vase-heslo",
-    "smtp_use_tls": true,
-    "default_sender": "vas-email@vase-domena.cz"
+    "smtp": {
+        "host": "localhost",
+        "port": 25,
+        "username": "",
+        "password": "",
+        "use_tls": false,
+        "from": "tomeska@european.cz"
+    }
+}
+```
+
+3. Alternativně pro externí SMTP (pokud lokální nefunguje):
+```json
+{
+    "smtp": {
+        "host": "smtp.wedos.net",
+        "port": 587,
+        "username": "tomeska@european.cz",
+        "password": "vase-heslo",
+        "use_tls": true,
+        "from": "tomeska@european.cz"
+    }
 }
 ```
 
@@ -100,12 +116,25 @@ pip3 install --user flask sqlalchemy pandas openpyxl
 
 ## 📧 Konfigurace emailů
 
-### SMTP nastavení pro Wedos:
+### Doporučené nastavení pro Wedos (bez hesla):
+- **Host**: `localhost` (používá lokální SMTP server)
+- **Port**: `25`
+- **Username**: prázdné
+- **Password**: prázdné
+- **TLS**: `false`
+- **From**: `tomeska@european.cz`
+
+### Alternativní SMTP nastavení pro Wedos:
 - **Server**: `smtp.wedos.net`
 - **Port**: `587` (STARTTLS) nebo `465` (SSL)
-- **Username**: váš email
+- **Username**: `tomeska@european.cz`
 - **Password**: heslo k emailu
 - **TLS**: `true`
+
+### Automatické fallback:
+Aplikace se automaticky pokusí:
+1. **Nejdříve** použít lokální SMTP server (localhost:25)
+2. **Pokud selže**, použije externí SMTP server ze settings.json
 
 ### Testování emailů:
 Po nasazení vyzkoušejte:

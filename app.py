@@ -25,12 +25,14 @@ try:
 except FileNotFoundError:
     print(f"Warning: {SETTINGS_PATH} not found, using default settings")
     SETTINGS = {
-        "smtp_server": "localhost",
-        "smtp_port": 587,
-        "smtp_username": "",
-        "smtp_password": "",
-        "smtp_use_tls": True,
-        "default_sender": "noreply@example.com"
+        "smtp": {
+            "host": "localhost",
+            "port": 25,
+            "username": "",
+            "password": "",
+            "use_tls": False,
+            "from": "tomeska@european.cz"
+        }
     }
 
 app = Flask(__name__)
@@ -197,22 +199,16 @@ def calculate_file_hash(file_content):
     return hashlib.sha256(file_content).hexdigest()
 
 def send_email(to_emails, subject, body, html_body=None):
-    """Odešle email pomocí SMTP konfigurace"""
+    """Odešle email pomocí SMTP konfigurace nebo lokálního sendmail"""
     try:
         smtp_config = SETTINGS.get('smtp', {})
         
-        # Vytvoření SMTP spojení
-        server = smtplib.SMTP(smtp_config.get('host', 'localhost'), smtp_config.get('port', 587))
-        
-        if smtp_config.get('use_tls', True):
-            server.starttls()
-        
-        if smtp_config.get('username') and smtp_config.get('password'):
-            server.login(smtp_config.get('username'), smtp_config.get('password'))
+        # Nastavení odesílací adresy
+        from_email = smtp_config.get('from', 'tomeska@european.cz')
         
         # Vytvoření emailu
         msg = MIMEMultipart('alternative')
-        msg['From'] = smtp_config.get('from', 'no-reply@example.com')
+        msg['From'] = from_email
         msg['Subject'] = subject
         
         # Přidání textové části
@@ -224,18 +220,49 @@ def send_email(to_emails, subject, body, html_body=None):
             html_part = MIMEText(html_body, 'html', 'utf-8')
             msg.attach(html_part)
         
-        # Odeslání na všechny adresy
+        # Příprava seznamu emailů
         if isinstance(to_emails, str):
             to_emails = [to_emails]
         
-        for email in to_emails:
-            if email.strip():
-                msg['To'] = email.strip()
+        valid_emails = [email.strip() for email in to_emails if email.strip()]
+        if not valid_emails:
+            return False, "Žádné platné email adresy"
+        
+        # Zkusíme nejdříve lokální odesílání (pro Wedos hosting)
+        try:
+            # Použití lokálního SMTP serveru (typické pro shared hosting)
+            server = smtplib.SMTP('localhost', 25)
+            
+            for email in valid_emails:
+                msg['To'] = email
                 server.send_message(msg)
                 del msg['To']  # Odstranit pro další iteraci
-        
-        server.quit()
-        return True, "Email byl úspěšně odeslán"
+            
+            server.quit()
+            return True, "Email byl úspěšně odeslán přes lokální server"
+            
+        except Exception as local_error:
+            print(f"Lokální SMTP selhal: {local_error}")
+            
+            # Fallback na externí SMTP server
+            if smtp_config.get('host') and smtp_config.get('host') != 'localhost':
+                server = smtplib.SMTP(smtp_config.get('host'), smtp_config.get('port', 587))
+                
+                if smtp_config.get('use_tls', True):
+                    server.starttls()
+                
+                if smtp_config.get('username') and smtp_config.get('password'):
+                    server.login(smtp_config.get('username'), smtp_config.get('password'))
+                
+                for email in valid_emails:
+                    msg['To'] = email
+                    server.send_message(msg)
+                    del msg['To']
+                
+                server.quit()
+                return True, "Email byl úspěšně odeslán přes externí SMTP"
+            else:
+                raise local_error
         
     except Exception as e:
         return False, f"Chyba při odesílání emailu: {str(e)}"
