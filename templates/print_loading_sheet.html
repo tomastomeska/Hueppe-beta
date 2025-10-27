@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Náložní list - {{ order.name }}</title>
+    <title>Zakázka - {{ order.name }}</title>
     <style>
         @page {
             size: A4;
@@ -47,20 +47,20 @@
         .header {
             text-align: center;
             border-bottom: 3px solid #333;
-            padding-bottom: 20px;
-            margin-bottom: 30px;
+            padding-bottom: 15px;
+            margin-bottom: 20px;
         }
         
         .header h1 {
             margin: 0;
-            font-size: 24pt;
+            font-size: 28pt;
             font-weight: bold;
             color: #2c3e50;
         }
         
         .header h2 {
             margin: 5px 0 0 0;
-            font-size: 16pt;
+            font-size: 18pt;
             color: #7f8c8d;
             font-weight: normal;
         }
@@ -107,8 +107,8 @@
             display: flex;
             justify-content: center;
             gap: 50px;
-            margin: 20px 0;
-            padding: 20px;
+            margin: 15px 0;
+            padding: 15px;
             background: #ecf0f1;
             border-radius: 10px;
             border: 2px solid #bdc3c7;
@@ -136,10 +136,10 @@
         
         .lsa-section h3 {
             font-size: 16pt;
-            margin: 30px 0 15px 0;
+            margin: 20px 0 10px 0;
             color: #2c3e50;
             border-bottom: 2px solid #3498db;
-            padding-bottom: 10px;
+            padding-bottom: 5px;
         }
         
         .lsa-table {
@@ -245,7 +245,7 @@
     <button class="print-button no-print" onclick="window.print()">🖨️ Tisknout</button>
     
     <div class="header">
-        <h1>NÁLOŽNÍ LIST</h1>
+        <h1>ZAKÁZKA</h1>
         <h2>{{ order.name }}</h2>
         {% if order.is_loaded %}
             <div class="status-badge status-loaded">✅ NALOŽENO</div>
@@ -271,58 +271,6 @@
         {% endif %}
     </div>
     {% endif %}
-    
-    <!-- Informační sekce -->
-    <div class="info-section">
-        <div class="info-box">
-            <h3>📋 Informace o zakázce</h3>
-            <div class="info-row">
-                <span class="info-label">Zakázka:</span>
-                <span class="info-value">{{ order.name }}</span>
-            </div>
-            <div class="info-row">
-                <span class="info-label">Datum vytvoření:</span>
-                <span class="info-value">{{ order.created_at.strftime('%d.%m.%Y %H:%M') }}</span>
-            </div>
-            {% if order.pickup_datetime %}
-            <div class="info-row">
-                <span class="info-label">Datum nakládky:</span>
-                <span class="info-value">{{ order.pickup_datetime.strftime('%d.%m.%Y %H:%M') }}</span>
-            </div>
-            {% endif %}
-            <div class="info-row">
-                <span class="info-label">Kapacita:</span>
-                <span class="info-value">{{ order.capacity_m }} m</span>
-            </div>
-        </div>
-        
-        <div class="info-box">
-            <h3>🚛 Informace o dopravci</h3>
-            {% if order.carrier_name %}
-            <div class="info-row">
-                <span class="info-label">Dopravce:</span>
-                <span class="info-value">{{ order.carrier_name }}</span>
-            </div>
-            {% endif %}
-            {% if order.truck_license_plate %}
-            <div class="info-row">
-                <span class="info-label">SPZ:</span>
-                <span class="info-value"><strong>{{ order.truck_license_plate }}</strong></span>
-            </div>
-            {% endif %}
-            {% if order.carrier_email %}
-            <div class="info-row">
-                <span class="info-label">Email:</span>
-                <span class="info-value">{{ order.carrier_email }}</span>
-            </div>
-            {% endif %}
-            {% if not order.carrier_name and not order.truck_license_plate and not order.carrier_email %}
-            <div class="info-row">
-                <span class="info-value" style="color: #95a5a6; font-style: italic;">Informace o dopravci nejsou vyplněny</span>
-            </div>
-            {% endif %}
-        </div>
-    </div>
     
     <!-- LSA Seznam -->
     <div class="lsa-section">
@@ -368,18 +316,6 @@
             Žádné palety nejsou přiřazeny k lanes pro nakládku
         </div>
         {% endif %}
-    </div>
-    
-    <!-- Podpisy -->
-    <div class="footer">
-        <div class="signature-box">
-            <h4>Podpis dopravce:</h4>
-            <div style="border-bottom: 1px solid #bdc3c7; margin-top: 40px;"></div>
-        </div>
-        <div class="signature-box">
-            <h4>Podpis nakládajícího:</h4>
-            <div style="border-bottom: 1px solid #bdc3c7; margin-top: 40px;"></div>
-        </div>
     </div>
     
     <div style="text-align: center; margin-top: 30px; font-size: 10pt; color: #95a5a6;">

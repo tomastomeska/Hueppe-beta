@@ -45,6 +45,18 @@
               <div>
                 <a href="{{ url_for('order_view', order_id=o.id) }}">{{ o.name }}</a>
                 <span class="badge bg-success ms-2">Uzavřeno</span>
+                {% if o.is_loaded %}
+                  <span class="badge bg-primary ms-1">✅ Naloženo</span>
+                {% else %}
+                  <span class="badge bg-warning ms-1">⏳ Čeká na naložení</span>
+                {% endif %}
+                {% if o.za_number %}
+                  <br><small class="text-muted">ZA: {{ o.za_number }}</small>
+                {% endif %}
+                {% if o.oo_number %}
+                  {% if o.za_number %} | {% else %}<br>{% endif %}
+                  <small class="text-muted">OO: {{ o.oo_number }}</small>
+                {% endif %}
                 {% if o.carrier_name %}
                   <br><small class="text-muted">Dopravce: {{ o.carrier_name }}</small>
                 {% endif %}
