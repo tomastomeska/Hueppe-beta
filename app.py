@@ -1210,6 +1210,179 @@ def print_loading_sheet(order_id):
                          lsa_summary=lsa_summary,
                          current_time=current_time)
 
+@app.route('/backup_database')
+def backup_database():
+    """Export celé databáze do JSON souboru"""
+    try:
+        backup_data = {
+            'export_date': datetime.now().isoformat(),
+            'version': '1.0',
+            'orders': [],
+            'pallet_items': [],
+            'imported_files': []
+        }
+        
+        # Export zakázek
+        orders = Order.query.all()
+        for order in orders:
+            order_data = {
+                'id': order.id,
+                'name': order.name,
+                'created_at': order.created_at.isoformat() if order.created_at else None,
+                'closed': order.closed,
+                'saved_for_later': order.saved_for_later,
+                'capacity_m': order.capacity_m,
+                'price_per_place': order.price_per_place,
+                'full_truck_price': order.full_truck_price,
+                'carrier_name': order.carrier_name,
+                'pickup_datetime': order.pickup_datetime.isoformat() if order.pickup_datetime else None,
+                'truck_license_plate': order.truck_license_plate,
+                'carrier_email': order.carrier_email,
+                'loading_emails': order.loading_emails,
+                'user_email': order.user_email,
+                'is_loaded': order.is_loaded,
+                'za_number': order.za_number,
+                'oo_number': order.oo_number
+            }
+            backup_data['orders'].append(order_data)
+        
+        # Export palet
+        items = PalletItem.query.all()
+        for item in items:
+            item_data = {
+                'id': item.id,
+                'order_id': item.order_id,
+                'date_received': item.date_received.isoformat() if item.date_received else None,
+                'lsa_designation': item.lsa_designation,
+                'lsa': item.lsa,
+                'name': item.name,
+                'length_m': item.length_m,
+                'width_m': item.width_m,
+                'height_m': item.height_m,
+                'weight': item.weight,
+                'assigned_lane': item.assigned_lane,
+                'import_order': item.import_order
+            }
+            backup_data['pallet_items'].append(item_data)
+        
+        # Export importovaných souborů
+        files = ImportedFile.query.all()
+        for file in files:
+            file_data = {
+                'id': file.id,
+                'filename': file.filename,
+                'file_hash': file.file_hash,
+                'uploaded_at': file.uploaded_at.isoformat() if file.uploaded_at else None,
+                'order_id': file.order_id,
+                'rows_imported': file.rows_imported
+            }
+            backup_data['imported_files'].append(file_data)
+        
+        # Vytvoření response s JSON souborem
+        backup_json = json.dumps(backup_data, indent=2, ensure_ascii=False)
+        
+        response = make_response(backup_json)
+        response.headers['Content-Type'] = 'application/json; charset=utf-8'
+        response.headers['Content-Disposition'] = f'attachment; filename=hueppe_backup_{datetime.now().strftime("%Y%m%d_%H%M%S")}.json'
+        
+        return response
+        
+    except Exception as e:
+        flash(f'Chyba při vytváření zálohy: {str(e)}', 'danger')
+        return redirect(url_for('settings'))
+
+@app.route('/restore_database', methods=['POST'])
+def restore_database():
+    """Import databáze z JSON souboru"""
+    if 'backup_file' not in request.files:
+        flash('Nebyl vybrán žádný soubor', 'danger')
+        return redirect(url_for('settings'))
+    
+    file = request.files['backup_file']
+    if file.filename == '':
+        flash('Nebyl vybrán žádný soubor', 'danger')
+        return redirect(url_for('settings'))
+    
+    try:
+        # Načtení JSON dat
+        backup_data = json.loads(file.read().decode('utf-8'))
+        
+        # Kontrola formátu
+        if 'orders' not in backup_data or 'pallet_items' not in backup_data:
+            flash('Nevalidní formát záložního souboru', 'danger')
+            return redirect(url_for('settings'))
+        
+        # Vymazání stávajících dat
+        PalletItem.query.delete()
+        ImportedFile.query.delete()
+        Order.query.delete()
+        db.session.commit()
+        
+        # Import zakázek
+        order_id_mapping = {}  # Mapování starých ID na nová
+        for order_data in backup_data['orders']:
+            order = Order(
+                name=order_data['name'],
+                created_at=datetime.fromisoformat(order_data['created_at']) if order_data['created_at'] else datetime.utcnow(),
+                closed=order_data.get('closed', False),
+                saved_for_later=order_data.get('saved_for_later', False),
+                capacity_m=order_data.get('capacity_m', 13.6),
+                price_per_place=order_data.get('price_per_place', 1160.0),
+                full_truck_price=order_data.get('full_truck_price', 25600.0),
+                carrier_name=order_data.get('carrier_name'),
+                pickup_datetime=datetime.fromisoformat(order_data['pickup_datetime']) if order_data.get('pickup_datetime') else None,
+                truck_license_plate=order_data.get('truck_license_plate'),
+                carrier_email=order_data.get('carrier_email'),
+                loading_emails=order_data.get('loading_emails'),
+                user_email=order_data.get('user_email'),
+                is_loaded=order_data.get('is_loaded', False),
+                za_number=order_data.get('za_number'),
+                oo_number=order_data.get('oo_number')
+            )
+            db.session.add(order)
+            db.session.flush()  # Získání nového ID
+            order_id_mapping[order_data['id']] = order.id
+        
+        # Import palet
+        for item_data in backup_data['pallet_items']:
+            if item_data['order_id'] in order_id_mapping:
+                item = PalletItem(
+                    order_id=order_id_mapping[item_data['order_id']],
+                    date_received=datetime.fromisoformat(item_data['date_received']) if item_data.get('date_received') else None,
+                    lsa_designation=item_data.get('lsa_designation'),
+                    lsa=item_data.get('lsa'),
+                    name=item_data.get('name'),
+                    length_m=item_data.get('length_m'),
+                    width_m=item_data.get('width_m'),
+                    height_m=item_data.get('height_m'),
+                    weight=item_data.get('weight', 0.0),
+                    assigned_lane=item_data.get('assigned_lane'),
+                    import_order=item_data.get('import_order', 0)
+                )
+                db.session.add(item)
+        
+        # Import importovaných souborů
+        for file_data in backup_data.get('imported_files', []):
+            if file_data['order_id'] in order_id_mapping:
+                imported_file = ImportedFile(
+                    filename=file_data['filename'],
+                    file_hash=file_data['file_hash'],
+                    uploaded_at=datetime.fromisoformat(file_data['uploaded_at']) if file_data.get('uploaded_at') else datetime.utcnow(),
+                    order_id=order_id_mapping[file_data['order_id']],
+                    rows_imported=file_data.get('rows_imported', 0)
+                )
+                db.session.add(imported_file)
+        
+        db.session.commit()
+        
+        flash(f'Databáze byla úspěšně obnovena! Importováno: {len(backup_data["orders"])} zakázek, {len(backup_data["pallet_items"])} palet', 'success')
+        
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Chyba při obnově databáze: {str(e)}', 'danger')
+    
+    return redirect(url_for('settings'))
+
 if __name__ == '__main__':
     with app.app_context():
         init_db()

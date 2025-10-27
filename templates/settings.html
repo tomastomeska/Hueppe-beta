@@ -80,4 +80,61 @@
     
   </form>
   
+  <!-- Správa záloh databáze -->
+  <hr class="mt-5">
+  <div class="row">
+    <div class="col-md-12">
+      <h5>🗄️ Správa záloh databáze</h5>
+      <p class="text-muted">Zálohujte si databázi před důležitými změnami nebo aktualizacemi systému.</p>
+      
+      <div class="row">
+        <div class="col-md-6">
+          <div class="card">
+            <div class="card-header">
+              <h6 class="mb-0">📥 Stáhnout zálohu</h6>
+            </div>
+            <div class="card-body">
+              <p class="small text-muted">Exportuje všechna data (zakázky, palety, soubory) do JSON souboru.</p>
+              <a href="{{ url_for('backup_database') }}" class="btn btn-outline-success btn-sm">
+                💾 Stáhnout zálohu databáze
+              </a>
+            </div>
+          </div>
+        </div>
+        
+        <div class="col-md-6">
+          <div class="card">
+            <div class="card-header">
+              <h6 class="mb-0">📤 Nahrát zálohu</h6>
+            </div>
+            <div class="card-body">
+              <p class="small text-muted">
+                <strong class="text-warning">⚠️ Pozor:</strong> Toto vymaže všechna současná data a nahradí je daty ze zálohy!
+              </p>
+              <form method="post" action="{{ url_for('restore_database') }}" enctype="multipart/form-data" 
+                    onsubmit="return confirm('Opravdu chcete nahradit všechna data zálohou? Tuto akci nelze vrátit!')">
+                <div class="mb-2">
+                  <input type="file" name="backup_file" accept=".json" class="form-control form-control-sm" required>
+                </div>
+                <button type="submit" class="btn btn-outline-danger btn-sm">
+                  🔄 Obnovit z zálohy
+                </button>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="alert alert-info mt-3">
+        <strong>💡 Doporučení:</strong>
+        <ul class="mb-0">
+          <li>Vytvářejte zálohu pravidelně (např. týdně)</li>
+          <li>Vytvořte zálohu před každou aktualizací systému</li>
+          <li>Uchovávejte zálohy na bezpečném místě (Google Drive, Dropbox, atd.)</li>
+          <li>Pojmenujte zálohy s datem: <code>hueppe_backup_20251027.json</code></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  
 {% endblock %}
