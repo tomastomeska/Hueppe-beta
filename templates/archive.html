@@ -1,0 +1,77 @@
+{% extends 'base.html' %}
+{% block content %}
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <h2>📦 Archiv doručených zakázek</h2>
+    <div>
+      <a href="{{ url_for('loading_orders') }}" class="btn btn-secondary">
+        ← Zpět na aktivní zakázky
+      </a>
+    </div>
+  </div>
+
+  {% if orders %}
+    <div class="row">
+      {% for order in orders %}
+        <div class="col-md-6 col-lg-4 mb-3">
+          <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+              <h6 class="mb-0">Zakázka #{{ order.id }}</h6>
+              <span class="badge bg-success">Doručeno</span>
+            </div>
+            <div class="card-body">
+              <h6 class="card-title">{{ order.name }}</h6>
+              <p class="card-text">
+                <small class="text-muted">
+                  Vytvořeno: {{ order.created_at.strftime('%d.%m.%Y %H:%M') }}<br>
+                  {% if order.pickup_datetime %}
+                  Nakládka: {{ order.pickup_datetime.strftime('%d.%m.%Y %H:%M') }}<br>
+                  {% endif %}
+                  {% if order.carrier_name %}
+                  Dopravce: {{ order.carrier_name }}<br>
+                  {% endif %}
+                  {% if order.za_number %}
+                  ZA číslo: {{ order.za_number }}<br>
+                  {% endif %}
+                  {% if order.oo_number %}
+                  OO číslo: {{ order.oo_number }}<br>
+                  {% endif %}
+                  Palety: {{ order.items|length }}
+                </small>
+              </p>
+              <div class="d-flex gap-2">
+                <a href="{{ url_for('order_view', order_id=order.id) }}" class="btn btn-sm btn-outline-primary">
+                  📋 Detail
+                </a>
+                {% if order.za_number or order.oo_number %}
+                <a href="{{ url_for('print_loading_sheet', order_id=order.id) }}" target="_blank" 
+                   class="btn btn-sm btn-outline-secondary">
+                  🖨️ Náložní list
+                </a>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+    
+    <div class="mt-4">
+      <p class="text-muted">
+        <small>Celkem doručených zakázek: {{ orders|length }}</small>
+      </p>
+    </div>
+  {% else %}
+    <div class="text-center py-5">
+      <div class="mb-3">
+        <i class="display-4 text-muted">📦</i>
+      </div>
+      <h4 class="text-muted">Žádné doručené zakázky</h4>
+      <p class="text-muted">
+        Doručené zakázky se zobrazí zde poté, co označíte zakázku jako "doručeno".
+      </p>
+      <a href="{{ url_for('loading_orders') }}" class="btn btn-primary">
+        Přejít na aktivní zakázky
+      </a>
+    </div>
+  {% endif %}
+{% endblock %}

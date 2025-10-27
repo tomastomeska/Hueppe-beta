@@ -14,7 +14,7 @@
 **Předmět:** `Kódy k nakládce (DD.MM.YYYY)`
 **Obsah:**
 ```
-Dobrý den, posílám Vám seznam kódů LSA k naložení v Bad Zwisenhahn...
+Dobrý den, posílám Vám seznam kódů LSA k naložení v Bad Zwischenahn...
 
 LSA kódy k naložení:
 LSA CZEX001: 2 palety
@@ -41,8 +41,8 @@ LSA CZU001: 3 palety
     "from": "your-email@gmail.com"
   },
   "default_loading_emails": [
-    "loading1@bad-zwisenhahn.com",
-    "loading2@bad-zwisenhahn.com"
+    "loading1@bad-zwischenahn.com",
+    "loading2@bad-zwischenahn.com"
   ]
 }
 ```

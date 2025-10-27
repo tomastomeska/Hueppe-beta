@@ -63,6 +63,7 @@ class Order(db.Model):
     user_email = db.Column(db.String(120))  # Email uživatele pro Reply-To
     # Loading status and tracking numbers
     is_loaded = db.Column(db.Boolean, default=False)
+    delivered = db.Column(db.Boolean, default=False)
     za_number = db.Column(db.String(50))  # ZA číslo (např. ZA-10250)
     oo_number = db.Column(db.String(50))  # OO číslo (např. OO-11056)
 
@@ -99,6 +100,19 @@ class PalletItem(db.Model):
 
 def init_db():
     db.create_all()
+    
+    # Migrace pro přidání sloupce 'delivered' 
+    try:
+        # Zkusíme přidat sloupec delivered, pokud neexistuje
+        with db.engine.begin() as conn:
+            result = conn.execute(db.text("PRAGMA table_info([order])"))
+            columns = [row[1] for row in result.fetchall()]
+            
+            if 'delivered' not in columns:
+                conn.execute(db.text("ALTER TABLE [order] ADD COLUMN delivered BOOLEAN DEFAULT 0"))
+                print("Added 'delivered' column to Order table")
+    except Exception as e:
+        print(f"Migration note: {e}")
 
 def get_lsa_color(lsa_code):
     """Vrátí konzistentní barvu pro LSA kód"""
@@ -310,7 +324,7 @@ def generate_carrier_email_body(order):
     lsa_summary = generate_lsa_summary(order)
     lsa_text = "\n".join([f"LSA {lsa}: {data['count']} palet" for lsa, data in lsa_summary.items()])
     
-    return f"""Dobrý den, posílám Vám seznam kódů LSA k naložení v Bad Zwisenhahn. Prosím předejte řidiči. Po naložení prosím o zaslání všech dodacích listů na Whatsapp +420778759958, nebo na email. Jakmile zkontroluji správnost naložení, může řidič odjet.
+    return f"""Dobrý den, posílám Vám seznam kódů LSA k naložení v Bad Zwischenahn. Prosím předejte řidiči. Po naložení prosím o zaslání všech dodacích listů na Whatsapp +420778759958, nebo na email. Jakmile zkontroluji správnost naložení, může řidič odjet.
 
 Pokud není ujednáno jinak, vozidlo musí být na místě vykládky druhý den v čase 7-8 hodin. Navazující doprava!!!!! V případě zdržení mě prosím neprodleně informujte.
 
@@ -452,8 +466,19 @@ Hueppe systém
 
 @app.route('/')
 def index():
-    orders = Order.query.order_by(Order.created_at.desc()).all()
-    return render_template('index.html', orders=orders)
+    return render_template('index.html')
+
+@app.route('/loading_orders')
+def loading_orders():
+    # Zobrazí pouze aktivní zakázky (nedelivered)
+    orders = Order.query.filter_by(delivered=False).order_by(Order.created_at.desc()).all()
+    return render_template('loading_orders.html', orders=orders)
+
+@app.route('/archive')
+def archive():
+    """Archiv doručených zakázek"""
+    delivered_orders = Order.query.filter_by(delivered=True).order_by(Order.created_at.desc()).all()
+    return render_template('archive.html', orders=delivered_orders)
 
 @app.route('/create_order', methods=['POST'])
 def create_order():
@@ -1166,12 +1191,18 @@ def test_email():
 
 @app.route('/update_loading_status/<int:order_id>', methods=['POST'])
 def update_loading_status(order_id):
-    """Aktualizace stavu náložení a ZA/OO čísel"""
+    """Aktualizace stavu náložení, doručení a ZA/OO čísel"""
     order = Order.query.get_or_404(order_id)
     
     try:
         # Aktualizace stavu náložení
         order.is_loaded = 'is_loaded' in request.form
+        
+        # Aktualizace stavu doručení (pouze pokud je naloženo)
+        if order.is_loaded:
+            order.delivered = 'delivered' in request.form
+        else:
+            order.delivered = False  # Pokud není naloženo, nemůže být doručeno
         
         # Aktualizace ZA a OO čísel
         za_number = request.form.get('za_number', '').strip()
@@ -1182,7 +1213,14 @@ def update_loading_status(order_id):
         
         db.session.commit()
         
-        status_msg = "naložena" if order.is_loaded else "čeká na naložení"
+        # Určení stavové zprávy
+        if order.delivered:
+            status_msg = "doručena (přesunuto do archivu)"
+        elif order.is_loaded:
+            status_msg = "naložena"
+        else:
+            status_msg = "čeká na naložení"
+            
         flash(f'Stav zakázky aktualizován: {status_msg}', 'success')
         
     except Exception as e:
@@ -1241,6 +1279,7 @@ def backup_database():
                 'loading_emails': order.loading_emails,
                 'user_email': order.user_email,
                 'is_loaded': order.is_loaded,
+                'delivered': order.delivered,
                 'za_number': order.za_number,
                 'oo_number': order.oo_number
             }
@@ -1336,6 +1375,7 @@ def restore_database():
                 loading_emails=order_data.get('loading_emails'),
                 user_email=order_data.get('user_email'),
                 is_loaded=order_data.get('is_loaded', False),
+                delivered=order_data.get('delivered', False),
                 za_number=order_data.get('za_number'),
                 oo_number=order_data.get('oo_number')
             )

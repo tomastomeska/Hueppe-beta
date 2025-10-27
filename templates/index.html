@@ -1,98 +1,37 @@
 {% extends 'base.html' %}
 {% block content %}
-  <div class="row">
-    <div class="col-md-6">
-      <h3>Aktivní zakázky</h3>
-      <ul class="list-group">
-        {% for o in orders if not o.saved_for_later and not o.closed %}
-          <li class="list-group-item">
-            <div class="d-flex justify-content-between align-items-center">
-              <div>
-                <a href="{{ url_for('order_view', order_id=o.id) }}">{{ o.name }}</a>
-                <br><small class="text-muted">{{ o.items|length }} palet</small>
-              </div>
-              <span class="text-muted">{{ o.created_at.strftime('%Y-%m-%d %H:%M') }}</span>
-            </div>
-          </li>
-        {% else %}
-          <li class="list-group-item">Žádné aktivní zakázky</li>
-        {% endfor %}
-      </ul>
-      
-      <h3 class="mt-4">Uložené na později</h3>
-      <ul class="list-group">
-        {% for o in orders if o.saved_for_later and not o.closed %}
-          <li class="list-group-item">
-            <div class="d-flex justify-content-between align-items-center">
-              <div>
-                <a href="{{ url_for('order_view', order_id=o.id) }}">{{ o.name }}</a>
-                <span class="badge bg-info ms-2">Uloženo</span>
-                <br><small class="text-muted">{{ o.items|length }} palet</small>
-              </div>
-              <span class="text-muted">{{ o.created_at.strftime('%Y-%m-%d %H:%M') }}</span>
-            </div>
-          </li>
-        {% else %}
-          <li class="list-group-item">Žádné uložené zakázky</li>
-        {% endfor %}
-      </ul>
-      
-      <h3 class="mt-4">Uzavřené zakázky</h3>
-      <ul class="list-group">
-        {% for o in orders if o.closed %}
-          <li class="list-group-item">
-            <div class="d-flex justify-content-between align-items-center">
-              <div>
-                <a href="{{ url_for('order_view', order_id=o.id) }}">{{ o.name }}</a>
-                <span class="badge bg-success ms-2">Uzavřeno</span>
-                {% if o.is_loaded %}
-                  <span class="badge bg-primary ms-1">✅ Naloženo</span>
-                {% else %}
-                  <span class="badge bg-warning ms-1">⏳ Čeká na naložení</span>
-                {% endif %}
-                {% if o.za_number %}
-                  <br><small class="text-muted">ZA: {{ o.za_number }}</small>
-                {% endif %}
-                {% if o.oo_number %}
-                  {% if o.za_number %} | {% else %}<br>{% endif %}
-                  <small class="text-muted">OO: {{ o.oo_number }}</small>
-                {% endif %}
-                {% if o.carrier_name %}
-                  <br><small class="text-muted">Dopravce: {{ o.carrier_name }}</small>
-                {% endif %}
-                {% if o.pickup_datetime %}
-                  <br><small class="text-muted">Nakládka: {{ o.pickup_datetime.strftime('%d.%m.%Y %H:%M') }}</small>
-                {% endif %}
-              </div>
-              <span class="text-muted">{{ o.created_at.strftime('%Y-%m-%d %H:%M') }}</span>
-            </div>
-          </li>
-        {% else %}
-          <li class="list-group-item">Žádné uzavřené zakázky</li>
-        {% endfor %}
-      </ul>
-    </div>
-    <div class="col-md-6">
-      <h3>Vytvořit zakázku</h3>
-      <form action="{{ url_for('create_order') }}" method="post">
-        <div class="mb-3">
-          <label>Jméno zakázky</label>
-          <input class="form-control" name="name" placeholder="např. Nakládka Praha 27.10.2025" required />
-        </div>
-        <button class="btn btn-primary">Vytvořit</button>
-      </form>
-      
-      <h3 class="mt-4">Přehled</h3>
-      <div class="card">
-        <div class="card-body">
-          <p><strong>Celkem zakázek:</strong> {{ orders|length }}</p>
-          <p><strong>Aktivní:</strong> {{ orders|selectattr('closed', 'equalto', false)|selectattr('saved_for_later', 'equalto', false)|list|length }}</p>
-          <p><strong>Uložené:</strong> {{ orders|selectattr('saved_for_later', 'equalto', true)|list|length }}</p>
-          <p><strong>Uzavřené:</strong> {{ orders|selectattr('closed', 'equalto', true)|list|length }}</p>
-          <hr>
-          <a href="{{ url_for('imported_files') }}" class="btn btn-outline-info">Přehled importovaných souborů</a>
+<div class="text-center">
+  <h2 class="mb-4">Vyberte sekci</h2>
+
+  <div class="row justify-content-center">
+    <div class="col-md-6 col-lg-4">
+      <div class="card h-100 shadow-sm border-primary">
+        <div class="card-body d-flex flex-column align-items-center p-4">
+          <div class="mb-3">
+            <i class="display-1" style="color: #666; filter: grayscale(100%);">🚛</i>
+          </div>
+          <h4 class="card-title text-primary mb-3">Bad Zwischenahn</h4>
+          <h6 class="card-subtitle mb-3 text-muted">Nakládky</h6>
+          <p class="card-text text-center">
+            Správa nakládek v Bad Zwischenahn
+          </p>
+          <a href="{{ url_for('loading_orders') }}" class="btn btn-primary btn-lg mt-auto">
+            Otevřít nakládky
+          </a>
         </div>
       </div>
     </div>
   </div>
+
+  <div class="mt-5">
+    <p class="text-muted">
+      <small>
+        European Transport CZ s.r.o. - <a
+          href="mailto:tomeska@european.cz?subject=Dotaz z aplikace Hueppe - správa zakázek"
+          class="text-decoration-none">Tomáš Tomeška</a><br>
+        Verze 1.0 | 2025
+      </small>
+    </p>
+  </div>
+</div>
 {% endblock %}
