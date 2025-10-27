@@ -1117,6 +1117,49 @@ def update_order_emails(order_id):
     
     return redirect(url_for('order_view', order_id=order_id))
 
+@app.route('/test_email')
+def test_email():
+    """Testovací endpoint pro ověření SMTP nastavení"""
+    try:
+        # Test základního SMTP připojení
+        smtp_config = SETTINGS.get('smtp', {})
+        
+        test_message = f"""
+        Testovací email z Hueppe systému
+        
+        Tento email byl odeslán pro ověření SMTP nastavení:
+        - Server: {smtp_config.get('host')}
+        - Port: {smtp_config.get('port')}
+        - Username: {smtp_config.get('username')}
+        - TLS: {smtp_config.get('use_tls')}
+        
+        Čas odeslání: {datetime.now().strftime('%d.%m.%Y %H:%M:%S')}
+        """
+        
+        # Odeslání na adresu odesílatele jako test
+        success, message = send_email(
+            to_emails=smtp_config.get('from', 'tomeska@european.cz'),
+            subject="Test SMTP nastavení - Hueppe systém",
+            body=test_message
+        )
+        
+        if success:
+            return jsonify({
+                'success': True, 
+                'message': f'Test email byl úspěšně odeslán! {message}'
+            })
+        else:
+            return jsonify({
+                'success': False, 
+                'error': f'Chyba při odesílání testu: {message}'
+            })
+            
+    except Exception as e:
+        return jsonify({
+            'success': False, 
+            'error': f'Obecná chyba: {str(e)}'
+        })
+
 if __name__ == '__main__':
     with app.app_context():
         init_db()
