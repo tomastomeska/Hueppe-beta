@@ -1,0 +1,6 @@
+Datum_doruceni,Oznaceni,LSA,Nazev,Delka_m,Sirka_m,Vyska_m,Vaha_kg
+2025-10-27,P001,LSA-12345,Test paleta 1,1.2,0.8,0.2,25.5
+2025-10-27,P002,LSA-12345,Test paleta 2,1.2,0.8,0.2,28.3
+2025-10-27,P003,LSA-67890,Test paleta 3,1.0,0.6,0.3,15.2
+2025-10-27,P004,LSA-67890,Test paleta 4,1.0,0.6,0.3,17.8
+2025-10-27,P005,LSA-11111,Test paleta 5,1.5,1.0,0.4,45.6

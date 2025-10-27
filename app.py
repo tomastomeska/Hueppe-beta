@@ -61,6 +61,10 @@ class Order(db.Model):
     carrier_email = db.Column(db.String(120))
     loading_emails = db.Column(db.Text)  # JSON string pro více emailů
     user_email = db.Column(db.String(120))  # Email uživatele pro Reply-To
+    # Loading status and tracking numbers
+    is_loaded = db.Column(db.Boolean, default=False)
+    za_number = db.Column(db.String(50))  # ZA číslo (např. ZA-10250)
+    oo_number = db.Column(db.String(50))  # OO číslo (např. OO-11056)
 
     def __repr__(self):
         return f'<Order {self.id} {self.name}>'
@@ -1159,6 +1163,52 @@ def test_email():
             'success': False, 
             'error': f'Obecná chyba: {str(e)}'
         })
+
+@app.route('/update_loading_status/<int:order_id>', methods=['POST'])
+def update_loading_status(order_id):
+    """Aktualizace stavu náložení a ZA/OO čísel"""
+    order = Order.query.get_or_404(order_id)
+    
+    try:
+        # Aktualizace stavu náložení
+        order.is_loaded = 'is_loaded' in request.form
+        
+        # Aktualizace ZA a OO čísel
+        za_number = request.form.get('za_number', '').strip()
+        oo_number = request.form.get('oo_number', '').strip()
+        
+        order.za_number = za_number if za_number else None
+        order.oo_number = oo_number if oo_number else None
+        
+        db.session.commit()
+        
+        status_msg = "naložena" if order.is_loaded else "čeká na naložení"
+        flash(f'Stav zakázky aktualizován: {status_msg}', 'success')
+        
+    except Exception as e:
+        flash(f'Chyba při aktualizaci stavu: {str(e)}', 'danger')
+    
+    return redirect(url_for('order_view', order_id=order_id))
+
+@app.route('/print_loading_sheet/<int:order_id>')
+def print_loading_sheet(order_id):
+    """Tiskový výstup pro náložení na A4"""
+    order = Order.query.get_or_404(order_id)
+    
+    if not order.closed:
+        flash('Tiskový výstup je dostupný pouze pro uzavřené zakázky', 'warning')
+        return redirect(url_for('order_view', order_id=order_id))
+    
+    # Vygenerujeme LSA summary pro tisk
+    lsa_summary = generate_lsa_summary(order)
+    
+    # Aktuální čas pro footer
+    current_time = datetime.now().strftime('%d.%m.%Y %H:%M')
+    
+    return render_template('print_loading_sheet.html', 
+                         order=order, 
+                         lsa_summary=lsa_summary,
+                         current_time=current_time)
 
 if __name__ == '__main__':
     with app.app_context():

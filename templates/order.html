@@ -439,6 +439,60 @@
           </form>
         </div>
       </div>
+      
+      <!-- Správa náložení a čísel ZA/OO -->
+      <div class="card mt-3">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <h6>🚛 Správa náložení</h6>
+          {% if order.is_loaded %}
+            <span class="badge bg-success">Naloženo</span>
+          {% else %}
+            <span class="badge bg-secondary">Čeká na naložení</span>
+          {% endif %}
+        </div>
+        <div class="card-body">
+          <form method="post" action="{{ url_for('update_loading_status', order_id=order.id) }}">
+            <div class="row">
+              <div class="col-md-3">
+                <div class="form-check form-switch">
+                  <input class="form-check-input" type="checkbox" name="is_loaded" id="isLoaded" 
+                         {% if order.is_loaded %}checked{% endif %}>
+                  <label class="form-check-label" for="isLoaded">
+                    Označit jako naloženo
+                  </label>
+                </div>
+              </div>
+              <div class="col-md-3">
+                <label class="form-label small">ZA číslo:</label>
+                <input type="text" name="za_number" class="form-control form-control-sm" 
+                       value="{{ order.za_number or '' }}" placeholder="ZA-10250">
+              </div>
+              <div class="col-md-3">
+                <label class="form-label small">OO číslo:</label>
+                <input type="text" name="oo_number" class="form-control form-control-sm" 
+                       value="{{ order.oo_number or '' }}" placeholder="OO-11056">
+              </div>
+              <div class="col-md-3 d-flex align-items-end">
+                <button type="submit" class="btn btn-sm btn-outline-primary">Aktualizovat</button>
+              </div>
+            </div>
+          </form>
+          
+          <!-- Tiskový výstup -->
+          {% if order.za_number or order.oo_number %}
+          <hr>
+          <div class="d-flex gap-2">
+            <a href="{{ url_for('print_loading_sheet', order_id=order.id) }}" target="_blank" 
+               class="btn btn-outline-info btn-sm">
+              🖨️ Tiskový výstup (A4)
+            </a>
+            {% if order.is_loaded %}
+              <small class="text-success align-self-center">✅ Zakázka označena jako naložená</small>
+            {% endif %}
+          </div>
+          {% endif %}
+        </div>
+      </div>
       {% endif %}
 
       <hr />
