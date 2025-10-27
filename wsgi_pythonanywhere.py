@@ -1,8 +1,9 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python3.10
 # -*- coding: utf-8 -*-
 """
-WSGI configuration for PythonAnywhere hosting
+WSGI configuration for PythonAnywhere hosting - Python 3.10
 Place this file in /var/www/ directory on PythonAnywhere
+Recommended Python version: 3.10
 """
 
 import sys

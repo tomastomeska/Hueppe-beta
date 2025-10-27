@@ -2,7 +2,7 @@
 
 ## 📋 Požadavky
 - PythonAnywhere účet (Free/Paid)
-- Python 3.8+ support
+- **Python 3.10** (doporučená verze)
 - Možnost nahrát soubory
 
 ## 🚀 Kroky pro nasazení:
@@ -16,7 +16,7 @@ cd Hueppe-bz
 
 ### 2. Instalace závislostí
 ```bash
-# Vytvoření virtual environment
+# Vytvoření virtual environment s Python 3.10
 python3.10 -m venv venv
 source venv/bin/activate
 
@@ -35,7 +35,7 @@ project_home = '/home/VASE_UZIVATELSKE_JMENO/Hueppe-bz'
 1. Jděte do **Web** tab
 2. Klikněte **Add a new web app**
 3. Vyberte **Manual configuration**
-4. Vyberte **Python 3.10**
+4. **Vyberte Python 3.10** ⭐
 5. V **Code** sekci:
    - Source code: `/home/yourusername/Hueppe-bz`
    - WSGI file: `/var/www/yourusername_pythonanywhere_com_wsgi.py`
