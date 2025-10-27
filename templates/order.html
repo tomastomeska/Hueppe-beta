@@ -326,6 +326,59 @@
         {% endif %}
       </div>
       
+      <!-- Souhrnná tabulka LSA -->
+      <div class="card mt-3">
+        <div class="card-header">
+          <h6>📊 Souhrn LSA k nakládce</h6>
+        </div>
+        <div class="card-body">
+          <div class="table-responsive">
+            <table class="table table-sm table-striped">
+              <thead class="table-light">
+                <tr>
+                  <th>LSA Nr.</th>
+                  <th>Pallet size</th>
+                  <th>Počet palet</th>
+                  <th>Celková váha (kg)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for lsa, data in lsa_summary.items() %}
+                <tr>
+                  <td><strong>{{ lsa }}</strong></td>
+                  <td>
+                    {% for length, count in data['lengths'].items() %}
+                      {% if count > 1 %}
+                        {{ length }} ({{ count }}ks)
+                      {% else %}
+                        {{ length }}
+                      {% endif %}
+                      {% if not loop.last %}, {% endif %}
+                    {% endfor %}
+                  </td>
+                  <td><span class="badge bg-primary">{{ data['count'] }}</span></td>
+                  <td><strong>{{ "%.0f"|format(data['total_weight']) }}</strong></td>
+                </tr>
+                {% endfor %}
+              </tbody>
+              <tfoot class="table-light">
+                <tr>
+                  <th colspan="2">Celkem</th>
+                  <th>
+                    {% set total_pallets = lsa_summary.values()|sum(attribute='count') %}
+                    <span class="badge bg-success">{{ total_pallets }}</span>
+                  </th>
+                  <th>
+                    {% set total_weight = lsa_summary.values()|sum(attribute='total_weight') %}
+                    <strong>{{ "%.0f"|format(total_weight) }}</strong>
+                  </th>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+      </div>
+      
       <!-- Email funkce pro uzavřené zakázky -->
       <div class="card mt-3">
         <div class="card-header">

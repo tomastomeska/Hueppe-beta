@@ -478,7 +478,11 @@ def order_view(order_id):
     is_full = price >= order.full_truck_price
     if is_full:
         price = order.full_truck_price
-    return render_template('order.html', order=order, lane_totals=lane_totals, pallet_places=pallet_places, price=price, is_full=is_full, total_weight=total_weight)
+    
+    # Generate LSA summary for closed orders
+    lsa_summary = generate_lsa_summary(order) if order.closed else {}
+    
+    return render_template('order.html', order=order, lane_totals=lane_totals, pallet_places=pallet_places, price=price, is_full=is_full, total_weight=total_weight, lsa_summary=lsa_summary)
 
 @app.route('/upload/<int:order_id>', methods=['GET','POST'])
 def upload(order_id):
