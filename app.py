@@ -264,33 +264,12 @@ def calculate_file_hash(file_content):
     return hashlib.sha256(file_content).hexdigest()
 
 def send_email(to_emails, subject, body, html_body=None, sender_email=None, reply_to=None):
-    """Odešle email pomocí SMTP konfigurace nebo lokálního sendmail"""
+    """Odešle email pomocí SMTP konfigurace nebo API služeb (SendGrid/Mailgun)"""
     try:
         smtp_config = SETTINGS.get('smtp', {})
         
         # Nastavení odesílací adresy (custom nebo výchozí)
         from_email = sender_email or smtp_config.get('from', 'tomeska@european.cz')
-        
-        # Vytvoření emailu
-        msg = MIMEMultipart('alternative')
-        msg['From'] = from_email
-        msg['Subject'] = subject
-        
-        # Nastavení Reply-To pokud je specifikované
-        if reply_to:
-            msg['Reply-To'] = reply_to
-        elif sender_email and sender_email != from_email:
-            # Pokud je custom sender, nastavit jako Reply-To
-            msg['Reply-To'] = sender_email
-        
-        # Přidání textové části
-        text_part = MIMEText(body, 'plain', 'utf-8')
-        msg.attach(text_part)
-        
-        # Přidání HTML části pokud je k dispozici
-        if html_body:
-            html_part = MIMEText(html_body, 'html', 'utf-8')
-            msg.attach(html_part)
         
         # Příprava seznamu emailů
         if isinstance(to_emails, str):
@@ -302,6 +281,26 @@ def send_email(to_emails, subject, body, html_body=None, sender_email=None, repl
         
         # Zkusíme nejdříve lokální odesílání (pro Wedos hosting)
         try:
+            # Vytvoření emailu
+            msg = MIMEMultipart('alternative')
+            msg['From'] = from_email
+            msg['Subject'] = subject
+            
+            # Nastavení Reply-To pokud je specifikované
+            if reply_to:
+                msg['Reply-To'] = reply_to
+            elif sender_email and sender_email != from_email:
+                msg['Reply-To'] = sender_email
+            
+            # Přidání textové části
+            text_part = MIMEText(body, 'plain', 'utf-8')
+            msg.attach(text_part)
+            
+            # Přidání HTML části pokud je k dispozici
+            if html_body:
+                html_part = MIMEText(html_body, 'html', 'utf-8')
+                msg.attach(html_part)
+            
             # Použití lokálního SMTP serveru (typické pro shared hosting)
             server = smtplib.SMTP('localhost', 25)
             
@@ -317,24 +316,83 @@ def send_email(to_emails, subject, body, html_body=None, sender_email=None, repl
             print(f"Lokální SMTP selhal: {local_error}")
             
             # Fallback na externí SMTP server
-            if smtp_config.get('host') and smtp_config.get('host') != 'localhost':
-                server = smtplib.SMTP(smtp_config.get('host'), smtp_config.get('port', 587))
+            try:
+                if smtp_config.get('host') and smtp_config.get('host') != 'localhost':
+                    server = smtplib.SMTP(smtp_config.get('host'), smtp_config.get('port', 587))
+                    
+                    if smtp_config.get('use_tls', True):
+                        server.starttls()
+                    
+                    if smtp_config.get('username') and smtp_config.get('password'):
+                        server.login(smtp_config.get('username'), smtp_config.get('password'))
+                    
+                    for email in valid_emails:
+                        msg['To'] = email
+                        server.send_message(msg)
+                        del msg['To']
+                    
+                    server.quit()
+                    return True, "Email byl úspěšně odeslán přes externí SMTP"
+                else:
+                    raise local_error
+                    
+            except Exception as smtp_error:
+                print(f"Externí SMTP selhal: {smtp_error}")
                 
-                if smtp_config.get('use_tls', True):
-                    server.starttls()
+                # Fallback na SendGrid API (pro PythonAnywhere)
+                if os.environ.get('SENDGRID_API_KEY'):
+                    try:
+                        import sendgrid
+                        from sendgrid.helpers.mail import Mail
+                        
+                        sg = sendgrid.SendGridAPIClient(api_key=os.environ.get('SENDGRID_API_KEY'))
+                        
+                        # Odešli každému příjemci zvlášť
+                        for email in valid_emails:
+                            mail = Mail(
+                                from_email=from_email,
+                                to_emails=email,
+                                subject=subject,
+                                html_content=html_body or body
+                            )
+                            
+                            response = sg.send(mail)
+                            print(f"SendGrid response for {email}: {response.status_code}")
+                        
+                        return True, f"Email odeslán přes SendGrid API ({len(valid_emails)} příjemců)"
+                        
+                    except Exception as sendgrid_error:
+                        print(f"SendGrid selhal: {sendgrid_error}")
                 
-                if smtp_config.get('username') and smtp_config.get('password'):
-                    server.login(smtp_config.get('username'), smtp_config.get('password'))
+                # Fallback na Mailgun API
+                if os.environ.get('MAILGUN_API_KEY') and os.environ.get('MAILGUN_DOMAIN'):
+                    try:
+                        import requests
+                        
+                        for email in valid_emails:
+                            response = requests.post(
+                                f"https://api.mailgun.net/v3/{os.environ.get('MAILGUN_DOMAIN')}/messages",
+                                auth=("api", os.environ.get('MAILGUN_API_KEY')),
+                                data={
+                                    "from": from_email,
+                                    "to": email,
+                                    "subject": subject,
+                                    "html": html_body or body,
+                                    "text": body
+                                },
+                                timeout=10
+                            )
+                            
+                            if response.status_code != 200:
+                                print(f"Mailgun chyba pro {email}: {response.status_code} - {response.text}")
+                        
+                        return True, f"Email odeslán přes Mailgun API ({len(valid_emails)} příjemců)"
+                        
+                    except Exception as mailgun_error:
+                        print(f"Mailgun selhal: {mailgun_error}")
                 
-                for email in valid_emails:
-                    msg['To'] = email
-                    server.send_message(msg)
-                    del msg['To']
-                
-                server.quit()
-                return True, "Email byl úspěšně odeslán přes externí SMTP"
-            else:
-                raise local_error
+                # Pokud vše selže
+                return False, f"Všechny email služby selhaly. Poslední chyba: {smtp_error}"
         
     except Exception as e:
         return False, f"Chyba při odesílání emailu: {str(e)}"
