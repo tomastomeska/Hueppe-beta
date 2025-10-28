@@ -2149,10 +2149,21 @@ def import_lsa_from_table():
     
     try:
         imported_count = 0
+        skipped_count = 0
         for lsa_item_id in lsa_item_ids:
             lsa_item = LSAItem.query.get(lsa_item_id)
             if not lsa_item:
                 continue
+            
+            # KONTROLA: jestli už LSA není v zakázce
+            existing_item = PalletItem.query.filter_by(
+                order_id=order_id,
+                lsa_item_id=lsa_item_id
+            ).first()
+            
+            if existing_item:
+                skipped_count += 1
+                continue  # Přeskoč, už je importováno
             
             # STEJNÁ LOGIKA JAKO NORMÁLNÍ UPLOAD: vytvoř samostatný řádek pro každou paletu
             for i in range(max(1, lsa_item.qty)):
@@ -2183,9 +2194,13 @@ def import_lsa_from_table():
         
         db.session.commit()
         
+        message = f'Importováno {imported_count} palet do zakázky "{order.name}"'
+        if skipped_count > 0:
+            message += f' (přeskočeno {skipped_count} již importovaných LSA)'
+        
         return jsonify({
             'success': True,
-            'message': f'Importováno {imported_count} LSA do zakázky "{order.name}"'
+            'message': message
         })
         
     except Exception as e:

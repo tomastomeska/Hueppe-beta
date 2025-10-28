@@ -161,6 +161,7 @@
                   <th>LSA Nr.</th>
                   <th>Označení</th>
                   <th>Text palety</th>
+                  <th>Počet palet</th>
                   <th>Délka (m)</th>
                   <th>Status</th>
                 </tr>
@@ -189,7 +190,10 @@
             </div>
             <div class="card-body">
               <div class="mb-2">
-                <strong>Vybrané LSA:</strong> <span id="selectedLSATableCount">0</span>
+                <strong>Vybrané typy LSA:</strong> <span id="selectedLSATableCount">0</span>
+              </div>
+              <div class="mb-2">
+                <strong>Celkem palet:</strong> <span id="selectedLSATablePallets">0</span>
               </div>
               <div class="mb-3">
                 <strong>Celková délka:</strong> <span id="selectedLSATableLength">0.00</span> m
@@ -2523,6 +2527,7 @@ function renderLSATableItems(items) {
                 <td><strong>${item.lsa || ''}</strong></td>
                 <td>${item.lsa_designation || ''}</td>
                 <td>${item.pallet_text || ''}</td>
+                <td class="text-center"><span class="badge bg-primary">${item.qty || 1}</span></td>
                 <td class="text-end">${item.length_m ? item.length_m.toFixed(2) : '0.00'}</td>
                 <td>${usageStatus}</td>
             </tr>
@@ -2593,15 +2598,20 @@ function updateSelectAllLSATableCheckbox() {
 function updateLSATableSummary() {
     const selectedCount = selectedLSATableItems.size;
     let totalLength = 0;
+    let totalPallets = 0;
     
     selectedLSATableItems.forEach(itemId => {
         const item = currentLSATableItems.find(i => i.id === itemId);
-        if (item && item.length_m) {
-            totalLength += item.length_m;
+        if (item) {
+            const qty = item.qty || 1;
+            const length = item.length_m || 0;
+            totalPallets += qty;
+            totalLength += length * qty; // Celková délka = délka palety × počet palet
         }
     });
     
     document.getElementById('selectedLSATableCount').textContent = selectedCount;
+    document.getElementById('selectedLSATablePallets').textContent = totalPallets;
     document.getElementById('selectedLSATableLength').textContent = totalLength.toFixed(2);
     
     const importBtn = document.getElementById('importLSAFromTableBtn');

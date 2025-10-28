@@ -175,6 +175,7 @@ function viewLSATable(tableId) {
                                     <th>LSA označení</th>
                                     <th>LSA kód</th>
                                     <th>Text palety</th>
+                                    <th>Počet palet</th>
                                     <th>Délka (m)</th>
                                     <th>Použito v zakázkách</th>
                                 </tr>
@@ -193,6 +194,7 @@ function viewLSATable(tableId) {
                             <td>${item.lsa_designation || ''}</td>
                             <td><strong>${item.lsa || ''}</strong></td>
                             <td>${item.pallet_text || ''}</td>
+                            <td class="text-center"><span class="badge bg-primary">${item.qty || 1}</span></td>
                             <td class="text-end">${item.length_m ? item.length_m.toFixed(2) : '0.00'}</td>
                             <td>${usageInfo}</td>
                         </tr>
