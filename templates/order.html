@@ -21,6 +21,16 @@
       {% if order.closed %}
       <a class="btn btn-sm btn-outline-info" href="{{ url_for('print_order', order_id=order.id) }}" target="_blank">Tisk</a>
       {% endif %}
+      {% if not order.closed and order.items|length == 0 %}
+      <!-- Tlačítko pro smazání prázdné zakázky -->
+      <button type="button" class="btn btn-sm btn-outline-danger" 
+              onclick="deleteCurrentOrder(this.dataset.orderId, this.dataset.orderName)" 
+              data-order-id="{{ order.id }}" 
+              data-order-name="{{ order.name }}"
+              title="Smazat prázdnou zakázku">
+        🗑️ Smazat prázdnou zakázku
+      </button>
+      {% endif %}
     </div>
   </div>
 
@@ -30,6 +40,179 @@
     {% for file in order.imported_files %}
       {{ file.filename }} ({{ file.rows_imported }} palet, {{ file.uploaded_at.strftime('%d.%m.%Y %H:%M') }}){% if not loop.last %}, {% endif %}
     {% endfor %}
+  </div>
+  {% endif %}
+
+  {% if not order.closed %}
+  <!-- Import dostupných LSA -->
+  <div class="card mb-3">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <h6>📥 Import dostupných LSA z jiných zakázek</h6>
+      <button type="button" class="btn btn-sm btn-outline-primary" onclick="loadAvailableLSA(this.dataset.orderId)" id="loadAvailableLSABtn" data-order-id="{{ order.id }}">
+        🔍 Zobrazit dostupné LSA
+      </button>
+    </div>
+    <div class="card-body" id="availableLSAContainer" style="display: none;">
+      <div class="row">
+        <div class="col-md-8">
+          <div class="mb-3">
+            <input type="text" class="form-control" id="lsaSearchInput" placeholder="🔍 Vyhledat LSA podle čísla, označení nebo textu..." onkeyup="filterAvailableLSA()">
+          </div>
+          
+          <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+            <table class="table table-sm table-striped" id="availableLSATable">
+              <thead class="table-light sticky-top">
+                <tr>
+                  <th>
+                    <div class="form-check">
+                      <input class="form-check-input" type="checkbox" id="selectAllAvailableLSA" onchange="toggleSelectAllAvailable()">
+                      <label class="form-check-label" for="selectAllAvailableLSA">Vše</label>
+                    </div>
+                  </th>
+                  <th>LSA Nr.</th>
+                  <th>Označení</th>
+                  <th>Rozměry</th>
+                  <th>Počet</th>
+                  <th>Váha (kg)</th>
+                  <th>Zdroj</th>
+                </tr>
+              </thead>
+              <tbody id="availableLSATableBody">
+                <!-- Data načtena dynamicky přes AJAX -->
+              </tbody>
+            </table>
+          </div>
+          
+          <div id="noAvailableLSA" style="display: none;" class="text-center text-muted py-4">
+            <i class="fas fa-box-open"></i><br>
+            Žádné dostupné LSA nenalezeny
+          </div>
+        </div>
+        
+        <div class="col-md-4">
+          <div class="card">
+            <div class="card-header">
+              <h6>📊 Souhrn výběru</h6>
+            </div>
+            <div class="card-body">
+              <div class="mb-2">
+                <strong>Vybrané LSA:</strong> <span id="selectedLSACount">0</span>
+              </div>
+              <div class="mb-2">
+                <strong>Celkem palet:</strong> <span id="selectedPalletCount">0</span>
+              </div>
+              <div class="mb-3">
+                <strong>Celková váha:</strong> <span id="selectedTotalWeight">0</span> kg
+              </div>
+              
+              <button type="button" class="btn btn-success w-100" onclick="importSelectedLSA(this.dataset.orderId)" id="importLSABtn" data-order-id="{{ order.id }}" disabled>
+                📥 Importovat vybrané LSA
+              </button>
+              
+              <div class="mt-3">
+                <small class="text-muted">
+                  💡 <strong>Tip:</strong> Můžete importovat LSA z:
+                  <br>• Zakázek uložených na později
+                  <br>• Nepřiřazených palet z jiných zakázek
+                  <br>• Vyřazených z nakládky
+                </small>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Import z LSA tabulek -->
+  <div class="card mb-3">
+    <div class="card-header d-flex justify-content-between align-items-center">
+      <h6>📋 Import z LSA tabulek</h6>
+      <button type="button" class="btn btn-sm btn-outline-primary" onclick="loadLSATables()" id="loadLSATablesBtn">
+        🔍 Zobrazit LSA tabulky
+      </button>
+    </div>
+    <div class="card-body" id="lsaTablesContainer" style="display: none;">
+      <div class="row">
+        <div class="col-md-8">
+          <!-- Seznam LSA tabulek -->
+          <div class="mb-3">
+            <select class="form-select" id="lsaTableSelect" onchange="loadLSATableItems(this.value)">
+              <option value="">-- Vyberte LSA tabulku --</option>
+            </select>
+          </div>
+          
+          <!-- Vyhledávání v tabulce -->
+          <div class="mb-3" id="lsaTableSearchContainer" style="display: none;">
+            <input type="text" class="form-control" id="lsaTableSearchInput" placeholder="🔍 Vyhledat LSA podle čísla, označení nebo textu..." onkeyup="filterLSATableItems()">
+          </div>
+          
+          <!-- Obsah vybrané tabulky -->
+          <div class="table-responsive" style="max-height: 400px; overflow-y: auto;" id="lsaTableItemsContainer" style="display: none;">
+            <table class="table table-sm table-striped" id="lsaTableItemsTable">
+              <thead class="table-light sticky-top">
+                <tr>
+                  <th>
+                    <div class="form-check">
+                      <input class="form-check-input" type="checkbox" id="selectAllLSATableItems" onchange="toggleSelectAllLSATableItems()">
+                      <label class="form-check-label" for="selectAllLSATableItems">Vše</label>
+                    </div>
+                  </th>
+                  <th>LSA Nr.</th>
+                  <th>Označení</th>
+                  <th>Text palety</th>
+                  <th>Délka (m)</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="lsaTableItemsTableBody">
+                <!-- Data načtena dynamicky přes AJAX -->
+              </tbody>
+            </table>
+          </div>
+          
+          <div id="noLSATableSelected" class="text-center text-muted py-4">
+            <i class="fas fa-table"></i><br>
+            Vyberte LSA tabulku pro zobrazení dostupných LSA
+          </div>
+          
+          <div id="noLSATableItems" style="display: none;" class="text-center text-muted py-4">
+            <i class="fas fa-box-open"></i><br>
+            Vybraná tabulka neobsahuje žádné LSA
+          </div>
+        </div>
+        
+        <div class="col-md-4">
+          <div class="card">
+            <div class="card-header">
+              <h6>📊 Souhrn výběru z tabulky</h6>
+            </div>
+            <div class="card-body">
+              <div class="mb-2">
+                <strong>Vybrané LSA:</strong> <span id="selectedLSATableCount">0</span>
+              </div>
+              <div class="mb-3">
+                <strong>Celková délka:</strong> <span id="selectedLSATableLength">0.00</span> m
+              </div>
+              
+              <button type="button" class="btn btn-success w-100" id="importLSAFromTableBtn" 
+                      data-order-id="{{ order.id }}" disabled>
+                📥 Importovat vybrané LSA
+              </button>
+              
+              <div class="mt-3">
+                <small class="text-muted">
+                  💡 <strong>Tip:</strong> Importují se LSA z:
+                  <br>• Nahraných tabulek Excel/CSV
+                  <br>• Pouze nevyužitá LSA
+                  <br>• Zachovají se původní údaje
+                </small>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
   {% endif %}
 
@@ -99,6 +282,8 @@
           .capacity-truck-container {
             position: relative;
             height: 40px;
+            background-color: var(--bg-secondary);
+            border: 1px solid var(--border-color);
           }
           .capacity-fill-bar {
             height: 100%;
@@ -312,39 +497,95 @@
       </form>
       {% else %}
       <div class="alert alert-success">
-        <h5>Zakázka uzavřena</h5>
-        <p><strong>Dopravce:</strong> {{ order.carrier_name or 'neuvedeno' }}</p>
-        <p><strong>Email dopravce:</strong> {{ order.carrier_email or 'neuvedeno' }}</p>
-        <p><strong>Nakládka:</strong> {{ order.pickup_datetime.strftime('%d.%m.%Y %H:%M') if order.pickup_datetime else 'neuvedeno' }}</p>
-        <p><strong>Kamion:</strong> {{ order.truck_license_plate or 'neuvedeno' }}</p>
-        {% if order.loading_emails %}
-          {% set loading_emails_list = order.loading_emails|from_json %}
-          <p><strong>Email adresy nakládky:</strong> {{ loading_emails_list|join(', ') }}</p>
-        {% endif %}
-        {% if order.user_email %}
-          <p><strong>Reply-To email:</strong> {{ order.user_email }}</p>
-        {% endif %}
+        <div class="d-flex justify-content-between align-items-start">
+          <div>
+            <h5>Zakázka uzavřena</h5>
+            <p><strong>Dopravce:</strong> {{ order.carrier_name or 'neuvedeno' }}</p>
+            <p><strong>Email dopravce:</strong> {{ order.carrier_email or 'neuvedeno' }}</p>
+            <p><strong>Nakládka:</strong> {{ order.pickup_datetime.strftime('%d.%m.%Y %H:%M') if order.pickup_datetime else 'neuvedeno' }}</p>
+            <p><strong>Kamion:</strong> {{ order.truck_license_plate or 'neuvedeno' }}</p>
+            {% if order.loading_emails %}
+              {% set loading_emails_list = order.loading_emails|from_json %}
+              <p><strong>Email adresy nakládky:</strong> {{ loading_emails_list|join(', ') }}</p>
+            {% endif %}
+            {% if order.user_email %}
+              <p><strong>Reply-To email:</strong> {{ order.user_email }}</p>
+            {% endif %}
+          </div>
+          <div class="ms-3">
+            <!-- Tlačítko pro znovu otevření zakázky -->
+            <div class="dropdown">
+              <button class="btn btn-outline-warning dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                🔄 Znovu otevřít zakázku
+              </button>
+              <ul class="dropdown-menu">
+                <li>
+                  <form method="post" action="{{ url_for('reopen_order', order_id=order.id) }}" class="dropdown-item-form">
+                    <button type="submit" class="dropdown-item" onclick="return confirm('Opravdu chcete znovu otevřít tuto zakázku? Zachovají se všechny údaje dopravce.')">
+                      🔄 Znovu otevřít (zachovat údaje)
+                    </button>
+                  </form>
+                </li>
+                <li>
+                  <form method="post" action="{{ url_for('reopen_order', order_id=order.id) }}" class="dropdown-item-form">
+                    <input type="hidden" name="clear_carrier_info" value="on">
+                    <button type="submit" class="dropdown-item text-warning" onclick="return confirm('Opravdu chcete znovu otevřít tuto zakázku a vymazat všechny údaje dopravce?')">
+                      🗑️ Znovu otevřít (vymazat dopravce)
+                    </button>
+                  </form>
+                </li>
+              </ul>
+            </div>
+            <small class="text-muted d-block mt-1">Použijte pokud dopravce zakázku zruší</small>
+          </div>
+        </div>
       </div>
       
       <!-- Souhrnná tabulka LSA -->
-      <div class="card mt-3">
-        <div class="card-header">
+      <div class="card mt-3" data-order-id="{{ order.id }}">
+        <div class="card-header d-flex justify-content-between align-items-center">
           <h6>📊 Souhrn LSA k nakládce</h6>
+          <div id="loading-progress" class="progress" style="width: 200px; height: 20px; display: none;">
+            <div class="progress-bar bg-success" role="progressbar" style="width: 0%"></div>
+          </div>
         </div>
         <div class="card-body">
           <div class="table-responsive">
-            <table class="table table-sm table-striped">
+            <table class="table table-sm table-striped" id="lsa-summary-table">
               <thead class="table-light">
                 <tr>
+                  <th>
+                    <div class="form-check">
+                      <input class="form-check-input" type="checkbox" id="selectAllLSA" title="Označit/odznačit všechny LSA">
+                      <label class="form-check-label" for="selectAllLSA">
+                        Naloženo
+                      </label>
+                    </div>
+                  </th>
                   <th>LSA Nr.</th>
                   <th>Pallet size</th>
                   <th>Počet palet</th>
                   <th>Celková váha (kg)</th>
+                  <th>Akce</th>
                 </tr>
               </thead>
               <tbody>
                 {% for lsa, data in lsa_summary.items() %}
-                <tr>
+                <tr data-lsa="{{ lsa }}" data-order-id="{{ order.id }}">
+                  <td>
+                    <div class="form-check">
+                      <input class="form-check-input lsa-checkbox" type="checkbox" 
+                             id="lsa-{{ lsa }}" 
+                             data-lsa="{{ lsa }}" 
+                             data-order-id="{{ order.id }}"
+                             onchange="toggleLSALoaded(this.dataset.lsa, this.dataset.orderId, this.checked)">
+                      <label class="form-check-label" for="lsa-{{ lsa }}">
+                        <span class="loading-status" id="status-{{ lsa }}">
+                          <span class="badge bg-secondary">Nezkontrolováno</span>
+                        </span>
+                      </label>
+                    </div>
+                  </td>
                   <td><strong>{{ lsa }}</strong></td>
                   <td>
                     {% for length, count in data['lengths'].items() %}
@@ -358,12 +599,19 @@
                   </td>
                   <td><span class="badge bg-primary">{{ data['count'] }}</span></td>
                   <td><strong>{{ "%.0f"|format(data['total_weight']) }}</strong></td>
+                  <td>
+                    <button type="button" class="btn btn-sm btn-outline-danger" 
+                            onclick="removeLSAFromOrder(this.closest('tr').dataset.lsa, this.closest('tr').dataset.orderId)" 
+                            title="Odstranit celé LSA z nakládky">
+                      ❌ Odstranit
+                    </button>
+                  </td>
                 </tr>
                 {% endfor %}
               </tbody>
               <tfoot class="table-light">
                 <tr>
-                  <th colspan="2">Celkem</th>
+                  <th colspan="3">Celkem</th>
                   <th>
                     {% set total_pallets = lsa_summary.values()|sum(attribute='count') %}
                     <span class="badge bg-success">{{ total_pallets }}</span>
@@ -372,9 +620,55 @@
                     {% set total_weight = lsa_summary.values()|sum(attribute='total_weight') %}
                     <strong>{{ "%.0f"|format(total_weight) }}</strong>
                   </th>
+                  <th>
+                    <button type="button" class="btn btn-sm btn-warning" 
+                            onclick="returnUnloadedItems(this.closest('.card').dataset.orderId)" 
+                            id="return-unloaded-btn"
+                            title="Vrátit všechny neoznačené LSA zpět do fronty">
+                      ↩️ Vrátit nenaložené
+                    </button>
+                  </th>
                 </tr>
               </tfoot>
             </table>
+          </div>
+          
+          <!-- Celkový přehled načítání -->
+          <div class="mt-3 p-3 rounded" id="loading-overview" style="background-color: var(--bg-secondary); border: 1px solid var(--border-color);">
+            <h6>📋 Přehled nakládky</h6>
+            <div class="row">
+              <div class="col-md-4">
+                <div class="text-center">
+                  <div class="h4 text-success mb-1" id="loaded-count">0</div>
+                  <small style="color: var(--text-muted);">Naložené LSA</small>
+                </div>
+              </div>
+              <div class="col-md-4">
+                <div class="text-center">
+                  <div class="h4 text-danger mb-1" id="pending-count">{{ lsa_summary|length }}</div>
+                  <small style="color: var(--text-muted);">Čekající LSA</small>
+                </div>
+              </div>
+              <div class="col-md-4">
+                <div class="text-center">
+                  <div class="h4 text-primary mb-1" id="completion-percentage">0%</div>
+                  <small style="color: var(--text-muted);">Dokončeno</small>
+                </div>
+              </div>
+            </div>
+            
+            <!-- Progress bar -->
+            <div class="progress mt-3" style="height: 25px;">
+              <div class="progress-bar bg-success progress-bar-striped" 
+                   role="progressbar" 
+                   style="width: 0%" 
+                   id="overall-progress"
+                   aria-valuenow="0" 
+                   aria-valuemin="0" 
+                   aria-valuemax="100">
+                0%
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -524,7 +818,8 @@
 <style>
 /* Styly pro tabulkovou vizualizaci kamionu */
 .truck-layout {
-  background: white;
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
   border-radius: 8px;
   overflow: hidden;
   max-width: 600px;  /* Omezení šířky pro kompaktnost */
@@ -535,15 +830,16 @@
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
   gap: 1px;
-  background: #dee2e6;
+  background: var(--border-color);
   padding: 1px;
 }
 
 .lane-header {
-  background: white;
+  background: var(--card-bg);
   padding: 8px;      /* Zmenšeno z 10px */
   text-align: center;
-  border-bottom: 2px solid #dee2e6;
+  border-bottom: 2px solid var(--border-color);
+  color: var(--text-color);
 }
 
 .lane-header .badge {
@@ -555,22 +851,22 @@
 .lane-total {
   font-weight: bold;
   font-size: 1.0em;  /* Zmenšeno z 1.1em */
-  color: #495057;
+  color: var(--text-color);
 }
 
 .truck-lanes {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
   gap: 1px;
-  background: #dee2e6;
+  background: var(--border-color);
   min-height: 180px;  /* Zmenšeno z 200px */
 }
 
 .truck-lane {
-  background: white;
+  background: var(--card-bg);
   padding: 8px;      /* Zmenšeno z 10px */
   min-height: 160px; /* Zmenšeno z 180px */
-  border-right: 1px solid #dee2e6;
+  border-right: 1px solid var(--border-color);
   transition: all 0.3s ease;
   display: flex;
   flex-direction: column;
@@ -583,25 +879,29 @@
 }
 
 .truck-lane.drag-over {
-  background-color: #e3f2fd !important;
+  background-color: rgba(13, 110, 253, 0.15) !important;
   border-color: #2196f3;
   box-shadow: inset 0 0 10px rgba(33, 150, 243, 0.2);
 }
 
+[data-theme="dark"] .truck-lane.drag-over {
+  background-color: rgba(77, 171, 247, 0.15) !important;
+}
+
 .truck-lane.can-drop {
-  background-color: #f0f8ff;
+  background-color: rgba(0, 123, 255, 0.1);
   border: 2px dashed #007bff;
 }
 
 .truck-lane.unassigned {
-  background: #f8f9fa;
-  border: 2px dashed #6c757d;
+  background: var(--bg-secondary);
+  border: 2px dashed var(--text-muted);
   border-radius: 4px;
   margin-top: 10px;
 }
 
 .truck-lane.unassigned.drag-over {
-  background-color: #fff3cd;
+  background-color: rgba(255, 193, 7, 0.15);
   border-color: #ffc107;
 }
 
@@ -610,20 +910,20 @@
   width: 70px;  /* Zmenšeno z 80px pro kompaktnost */
   height: 55px; 
   margin: 3px;  /* Zmenšeno z 5px */
-  background: white;
+  background: var(--card-bg);
   border: 2px solid #28a745;
   border-radius: 4px;
   text-align: center;
   cursor: grab;
   transition: all 0.3s ease;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  box-shadow: 0 1px 3px var(--shadow);
   position: relative;
   user-select: none;
 }
 
 .pallet-box:hover {
   transform: translateY(-3px) scale(1.05);
-  box-shadow: 0 6px 16px rgba(0,0,0,0.25);
+  box-shadow: 0 6px 16px var(--shadow);
   border-color: #20c997;
   z-index: 10;
 }
@@ -636,7 +936,7 @@
   opacity: 0.7;
   transform: rotate(8deg) scale(1.1);
   z-index: 1000;
-  box-shadow: 0 8px 25px rgba(0,0,0,0.4);
+  box-shadow: 0 8px 25px var(--shadow);
   border-color: #007bff;
   filter: brightness(1.1);
 }
@@ -684,6 +984,17 @@
   color: white; /* Bílý text pro všechny LSA */
 }
 
+/* Dark mode vylepšení pro pallet text */
+[data-theme="dark"] .pallet-lsa {
+  color: #ffffff !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
+}
+
+[data-theme="dark"] .pallet-length {
+  color: #ffffff !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
+}
+
 /* Drop zones pro přesné umístění - vylepšené */
 .drop-zone {
   width: 100%;
@@ -719,6 +1030,11 @@
   box-shadow: 0 2px 8px rgba(0, 123, 255, 0.3);
 }
 
+[data-theme="dark"] .drop-zone.drag-over {
+  background-color: rgba(77, 171, 247, 0.15);
+  box-shadow: 0 2px 8px rgba(77, 171, 247, 0.3);
+}
+
 .drop-zone.drag-over:before {
   opacity: 1;
 }
@@ -727,8 +1043,8 @@
 .dragging-active .drop-zone {
   opacity: 0.6;
   transform: scaleY(0.8);
-  border-color: #dee2e6;
-  background-color: rgba(222, 226, 230, 0.1);
+  border-color: var(--border-color);
+  background-color: var(--bg-secondary);
 }
 
 .drop-zone.top {
@@ -740,11 +1056,11 @@
 }
 
 .unassigned-section .pallet-box {
-  border-color: #6c757d;
+  border-color: var(--text-muted);
 }
 
 .unassigned-section .pallet-length {
-  background: #6c757d;
+  background: var(--text-muted);
 }
 
 /* Animace pro lane totals */
@@ -882,6 +1198,60 @@
 .drop-zone:focus {
   outline: 2px solid #28a745;
   outline-offset: 1px;
+}
+
+/* Pink theme enhancements */
+[data-theme="pink"] .pallet-length {
+  background: #e91e63;
+}
+
+[data-theme="pink"] .pallet-box {
+  border-color: #f06292;
+  box-shadow: 0 1px 3px rgba(233, 30, 99, 0.3);
+}
+
+[data-theme="pink"] .pallet-box:hover {
+  border-color: #e91e63;
+  box-shadow: 0 6px 16px rgba(233, 30, 99, 0.4);
+}
+
+[data-theme="pink"] .drop-zone.drag-over {
+  border-color: #e91e63;
+  background-color: rgba(233, 30, 99, 0.15);
+  box-shadow: 0 2px 8px rgba(233, 30, 99, 0.3);
+}
+
+[data-theme="pink"] .truck-lane.drag-over {
+  background-color: rgba(233, 30, 99, 0.1) !important;
+  border-color: #e91e63;
+  box-shadow: inset 0 0 10px rgba(233, 30, 99, 0.2);
+}
+
+/* Green theme enhancements */
+[data-theme="green"] .pallet-length {
+  background: #4caf50;
+}
+
+[data-theme="green"] .pallet-box {
+  border-color: #66bb6a;
+  box-shadow: 0 1px 3px rgba(76, 175, 80, 0.3);
+}
+
+[data-theme="green"] .pallet-box:hover {
+  border-color: #4caf50;
+  box-shadow: 0 6px 16px rgba(76, 175, 80, 0.4);
+}
+
+[data-theme="green"] .drop-zone.drag-over {
+  border-color: #4caf50;
+  background-color: rgba(76, 175, 80, 0.15);
+  box-shadow: 0 2px 8px rgba(76, 175, 80, 0.3);
+}
+
+[data-theme="green"] .truck-lane.drag-over {
+  background-color: rgba(76, 175, 80, 0.1) !important;
+  border-color: #4caf50;
+  box-shadow: inset 0 0 10px rgba(76, 175, 80, 0.2);
 }
 </style>
 
@@ -1468,6 +1838,834 @@ function sendLoadingEmail(orderId) {
         button.disabled = false;
     });
 }
+
+// ===== NOVÉ FUNKCE PRO KONTROLU NALOŽENÝCH LSA =====
+
+// Označení/odznačení LSA jako naložené
+function toggleLSALoaded(lsa, orderId, loaded) {
+    const statusElement = document.getElementById(`status-${lsa}`);
+    const checkbox = document.getElementById(`lsa-${lsa}`);
+    
+    // Vizuální feedback
+    statusElement.innerHTML = '<span class="badge bg-warning">⏳ Ukládám...</span>';
+    checkbox.disabled = true;
+    
+    fetch('/mark_lsa_loaded', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            order_id: orderId,
+            lsa: lsa,
+            loaded: loaded
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Aktualizovat status badge
+            const badgeClass = loaded ? 'bg-success' : 'bg-secondary';
+            const badgeText = loaded ? '✅ Naloženo' : 'Nezkontrolováno';
+            statusElement.innerHTML = `<span class="badge ${badgeClass}">${badgeText}</span>`;
+            
+            // Aktualizovat celkové statistiky
+            updateLoadingStatistics(orderId);
+            
+            showSuccessMessage(data.message);
+        } else {
+            // Vrátit checkbox do původního stavu
+            checkbox.checked = !loaded;
+            statusElement.innerHTML = '<span class="badge bg-danger">❌ Chyba</span>';
+            showErrorMessage(data.error);
+        }
+    })
+    .catch(error => {
+        // Vrátit checkbox do původního stavu
+        checkbox.checked = !loaded;
+        statusElement.innerHTML = '<span class="badge bg-danger">❌ Chyba</span>';
+        showErrorMessage('Chyba při ukládání: ' + error);
+    })
+    .finally(() => {
+        checkbox.disabled = false;
+    });
+}
+
+// Odstranění LSA z nakládky
+function removeLSAFromOrder(lsa, orderId) {
+    if (!confirm(`Opravdu chcete odstranit celé LSA "${lsa}" z nakládky?\n\nVšechny palety s tímto LSA budou přesunuty do zakázky "Vyřazené z nakládky".`)) {
+        return;
+    }
+    
+    const row = document.querySelector(`tr[data-lsa="${lsa}"]`);
+    if (row) {
+        row.style.opacity = '0.5';
+    }
+    
+    // Použijeme existující formulář pro odstranění LSA
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = '/remove_lsa';
+    form.style.display = 'none';
+    
+    const orderInput = document.createElement('input');
+    orderInput.type = 'hidden';
+    orderInput.name = 'order_id';
+    orderInput.value = orderId;
+    
+    const lsaInput = document.createElement('input');
+    lsaInput.type = 'hidden';
+    lsaInput.name = 'lsa';
+    lsaInput.value = lsa;
+    
+    form.appendChild(orderInput);
+    form.appendChild(lsaInput);
+    document.body.appendChild(form);
+    form.submit();
+}
+
+// Vrácení všech nenaložených palet zpět do fronty
+function returnUnloadedItems(orderId) {
+    const uncheckedBoxes = document.querySelectorAll('.lsa-checkbox:not(:checked)');
+    const uncheckedLSAs = Array.from(uncheckedBoxes).map(cb => cb.dataset.lsa);
+    
+    if (uncheckedLSAs.length === 0) {
+        showSuccessMessage('Všechny LSA jsou označené jako naložené!');
+        return;
+    }
+    
+    if (!confirm(`Opravdu chcete vrátit ${uncheckedLSAs.length} neoznačených LSA zpět do fronty?\n\nLSA kódy: ${uncheckedLSAs.join(', ')}\n\nTyto palety budou přesunuty do zakázky "Vyřazené z nakládky".`)) {
+        return;
+    }
+    
+    const button = document.getElementById('return-unloaded-btn');
+    button.disabled = true;
+    button.innerHTML = '⏳ Přesouvám...';
+    
+    fetch('/return_unloaded_lsa', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            order_id: orderId
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showSuccessMessage(data.message);
+            // Obnovit stránku po úspěšném přesunu
+            setTimeout(() => {
+                location.reload();
+            }, 2000);
+        } else {
+            showErrorMessage(data.error);
+        }
+    })
+    .catch(error => {
+        showErrorMessage('Chyba při přesunu: ' + error);
+    })
+    .finally(() => {
+        button.disabled = false;
+        button.innerHTML = '↩️ Vrátit nenaložené';
+    });
+}
+
+// Aktualizace statistik nakládky
+function updateLoadingStatistics(orderId) {
+    fetch(`/get_loading_status/${orderId}`)
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            const overall = data.overall;
+            
+            // Aktualizovat čísla
+            document.getElementById('loaded-count').textContent = overall.loaded;
+            document.getElementById('pending-count').textContent = overall.total - overall.loaded;
+            document.getElementById('completion-percentage').textContent = overall.percentage + '%';
+            
+            // Aktualizovat progress bar
+            const progressBar = document.getElementById('overall-progress');
+            progressBar.style.width = overall.percentage + '%';
+            progressBar.setAttribute('aria-valuenow', overall.percentage);
+            progressBar.textContent = overall.percentage + '%';
+            
+            // Změnit barvu podle dokončení
+            progressBar.className = 'progress-bar progress-bar-striped';
+            if (overall.percentage === 100) {
+                progressBar.classList.add('bg-success');
+            } else if (overall.percentage >= 75) {
+                progressBar.classList.add('bg-info');
+            } else if (overall.percentage >= 50) {
+                progressBar.classList.add('bg-warning');
+            } else {
+                progressBar.classList.add('bg-danger');
+            }
+            
+            // Aktualizovat "Označit vše" checkbox
+            updateSelectAllCheckbox(overall.loaded, overall.total);
+        }
+    })
+    .catch(error => {
+        console.error('Chyba při načítání statistik:', error);
+    });
+}
+
+// Aktualizace "Označit vše" checkboxu
+function updateSelectAllCheckbox(loadedCount, totalCount) {
+    const selectAllCheckbox = document.getElementById('selectAllLSA');
+    
+    if (loadedCount === 0) {
+        selectAllCheckbox.checked = false;
+        selectAllCheckbox.indeterminate = false;
+    } else if (loadedCount === totalCount) {
+        selectAllCheckbox.checked = true;
+        selectAllCheckbox.indeterminate = false;
+    } else {
+        selectAllCheckbox.checked = false;
+        selectAllCheckbox.indeterminate = true;
+    }
+}
+
+// Označit/odznačit všechny LSA
+function toggleAllLSA() {
+    const selectAllCheckbox = document.getElementById('selectAllLSA');
+    const allCheckboxes = document.querySelectorAll('.lsa-checkbox');
+    const shouldCheck = selectAllCheckbox.checked;
+    
+    // Potvrdit akci
+    const action = shouldCheck ? 'označit všechny LSA jako naložené' : 'odznačit všechny LSA';
+    if (!confirm(`Opravdu chcete ${action}?`)) {
+        selectAllCheckbox.checked = !shouldCheck; // Vrátit zpět
+        return;
+    }
+    
+    // Postupně označit/odznačit všechny
+    allCheckboxes.forEach((checkbox, index) => {
+        setTimeout(() => {
+            if (checkbox.checked !== shouldCheck) {
+                checkbox.checked = shouldCheck;
+                toggleLSALoaded(checkbox.dataset.lsa, checkbox.dataset.orderId, shouldCheck);
+            }
+        }, index * 200); // Delay pro lepší UX
+    });
+}
+
+// Inicializace při načtení stránky
+document.addEventListener('DOMContentLoaded', function() {
+    // ... existující kód ...
+    
+    // Přidat event listener pro "Označit vše" checkbox
+    const selectAllCheckbox = document.getElementById('selectAllLSA');
+    if (selectAllCheckbox) {
+        selectAllCheckbox.addEventListener('change', toggleAllLSA);
+        
+        // Načíst aktuální statistiky
+        const orderId = selectAllCheckbox.closest('[data-order-id]')?.dataset.orderId || 
+                       document.querySelector('[data-order-id]')?.dataset.orderId;
+        if (orderId) {
+            updateLoadingStatistics(orderId);
+        }
+    }
+    
+    // Event listener pro import z LSA tabulky
+    const importLSAFromTableBtn = document.getElementById('importLSAFromTableBtn');
+    if (importLSAFromTableBtn) {
+        importLSAFromTableBtn.addEventListener('click', function() {
+            const orderId = this.dataset.orderId;
+            importSelectedLSAFromTable(parseInt(orderId));
+        });
+    }
+});
+
+// === IMPORT DOSTUPNÝCH LSA FUNKCIONALITA ===
+
+let availableLSAData = {};
+let selectedAvailableLSA = new Set();
+
+// Načtení dostupných LSA
+function loadAvailableLSA(orderId) {
+    const container = document.getElementById('availableLSAContainer');
+    const button = document.getElementById('loadAvailableLSABtn');
+    
+    // Toggle zobrazení
+    if (container.style.display === 'none') {
+        container.style.display = 'block';
+        button.innerHTML = '🔼 Skrýt dostupné LSA';
+        
+        // Načíst data pokud ještě nejsou načtena
+        if (Object.keys(availableLSAData).length === 0) {
+            fetchAvailableLSA(orderId);
+        }
+    } else {
+        container.style.display = 'none';
+        button.innerHTML = '🔍 Zobrazit dostupné LSA';
+    }
+}
+
+// API volání pro načtení dostupných LSA
+function fetchAvailableLSA(orderId) {
+    const tbody = document.getElementById('availableLSATableBody');
+    const noDataDiv = document.getElementById('noAvailableLSA');
+    
+    tbody.innerHTML = '<tr><td colspan="7" class="text-center"><i class="fas fa-spinner fa-spin"></i> Načítám dostupné LSA...</td></tr>';
+    
+    fetch(`/get_available_lsa/${orderId}`)
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            availableLSAData = data.available_lsa;
+            displayAvailableLSA();
+            
+            if (Object.keys(availableLSAData).length === 0) {
+                tbody.style.display = 'none';
+                noDataDiv.style.display = 'block';
+            } else {
+                tbody.style.display = '';
+                noDataDiv.style.display = 'none';
+            }
+        } else {
+            tbody.innerHTML = `<tr><td colspan="7" class="text-center text-danger">Chyba: ${data.error}</td></tr>`;
+        }
+    })
+    .catch(error => {
+        tbody.innerHTML = `<tr><td colspan="7" class="text-center text-danger">Chyba při načítání: ${error}</td></tr>`;
+    });
+}
+
+// Zobrazení dostupných LSA v tabulce
+function displayAvailableLSA(filteredData = null) {
+    const tbody = document.getElementById('availableLSATableBody');
+    const dataToShow = filteredData || availableLSAData;
+    
+    if (Object.keys(dataToShow).length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center text-muted">Žádné LSA nenalezeny</td></tr>';
+        return;
+    }
+    
+    let html = '';
+    
+    Object.entries(dataToShow).forEach(([lsaCode, lsaData]) => {
+        const lengthsText = Object.entries(lsaData.lengths)
+            .map(([length, count]) => count > 1 ? `${length} (${count}ks)` : length)
+            .join(', ');
+        
+        const sourcesText = lsaData.sources.slice(0, 2).join(', ') + 
+                           (lsaData.sources.length > 2 ? '...' : '');
+        
+        html += `
+            <tr data-lsa="${lsaCode}">
+                <td>
+                    <div class="form-check">
+                        <input class="form-check-input available-lsa-checkbox" type="checkbox" 
+                               data-lsa="${lsaCode}" 
+                               onchange="toggleAvailableLSASelection('${lsaCode}')">
+                    </div>
+                </td>
+                <td><strong>${lsaCode}</strong></td>
+                <td><small>${lsaData.lsa_designation || ''}</small></td>
+                <td><small>${lengthsText}</small></td>
+                <td><span class="badge bg-primary">${lsaData.count}</span></td>
+                <td><strong>${lsaData.total_weight.toFixed(1)}</strong></td>
+                <td><small title="${lsaData.sources.join(', ')}">${sourcesText}</small></td>
+            </tr>
+        `;
+    });
+    
+    tbody.innerHTML = html;
+}
+
+// Toggle výběru konkrétního LSA
+function toggleAvailableLSASelection(lsaCode) {
+    const checkbox = document.querySelector(`[data-lsa="${lsaCode}"].available-lsa-checkbox`);
+    
+    if (checkbox.checked) {
+        selectedAvailableLSA.add(lsaCode);
+    } else {
+        selectedAvailableLSA.delete(lsaCode);
+    }
+    
+    updateAvailableSelectionSummary();
+    updateSelectAllAvailableCheckbox();
+}
+
+// Toggle výběru všech dostupných LSA
+function toggleSelectAllAvailable() {
+    const selectAllCheckbox = document.getElementById('selectAllAvailableLSA');
+    const individualCheckboxes = document.querySelectorAll('.available-lsa-checkbox');
+    
+    selectedAvailableLSA.clear();
+    
+    individualCheckboxes.forEach(checkbox => {
+        checkbox.checked = selectAllCheckbox.checked;
+        if (selectAllCheckbox.checked) {
+            selectedAvailableLSA.add(checkbox.dataset.lsa);
+        }
+    });
+    
+    updateAvailableSelectionSummary();
+}
+
+// Aktualizace "Vybrat vše" checkboxu
+function updateSelectAllAvailableCheckbox() {
+    const selectAllCheckbox = document.getElementById('selectAllAvailableLSA');
+    const individualCheckboxes = document.querySelectorAll('.available-lsa-checkbox');
+    const checkedCount = selectedAvailableLSA.size;
+    const totalCount = individualCheckboxes.length;
+    
+    if (checkedCount === 0) {
+        selectAllCheckbox.checked = false;
+        selectAllCheckbox.indeterminate = false;
+    } else if (checkedCount === totalCount) {
+        selectAllCheckbox.checked = true;
+        selectAllCheckbox.indeterminate = false;
+    } else {
+        selectAllCheckbox.checked = false;
+        selectAllCheckbox.indeterminate = true;
+    }
+}
+
+// Aktualizace souhrnu výběru
+function updateAvailableSelectionSummary() {
+    let totalPallets = 0;
+    let totalWeight = 0;
+    
+    selectedAvailableLSA.forEach(lsaCode => {
+        if (availableLSAData[lsaCode]) {
+            totalPallets += availableLSAData[lsaCode].count;
+            totalWeight += availableLSAData[lsaCode].total_weight;
+        }
+    });
+    
+    document.getElementById('selectedLSACount').textContent = selectedAvailableLSA.size;
+    document.getElementById('selectedPalletCount').textContent = totalPallets;
+    document.getElementById('selectedTotalWeight').textContent = totalWeight.toFixed(1);
+    
+    // Aktivace/deaktivace import tlačítka
+    const importBtn = document.getElementById('importLSABtn');
+    importBtn.disabled = selectedAvailableLSA.size === 0;
+}
+
+// Filtrování dostupných LSA
+function filterAvailableLSA() {
+    const searchTerm = document.getElementById('lsaSearchInput').value.toLowerCase();
+    
+    if (searchTerm === '') {
+        displayAvailableLSA();
+        return;
+    }
+    
+    const filteredData = {};
+    
+    Object.entries(availableLSAData).forEach(([lsaCode, lsaData]) => {
+        const lsaMatches = lsaCode.toLowerCase().includes(searchTerm);
+        const designationMatches = (lsaData.lsa_designation || '').toLowerCase().includes(searchTerm);
+        const sourceMatches = lsaData.sources.some(source => source.toLowerCase().includes(searchTerm));
+        const textMatches = lsaData.items.some(item => 
+            (item.pallet_text || '').toLowerCase().includes(searchTerm)
+        );
+        
+        if (lsaMatches || designationMatches || sourceMatches || textMatches) {
+            filteredData[lsaCode] = lsaData;
+        }
+    });
+    
+    displayAvailableLSA(filteredData);
+}
+
+// Import vybraných LSA
+function importSelectedLSA(orderId) {
+    if (selectedAvailableLSA.size === 0) {
+        showErrorMessage('Nebyla vybrána žádná LSA');
+        return;
+    }
+    
+    // Získáme ID všech item pro vybrané LSA
+    const selectedItemIds = [];
+    selectedAvailableLSA.forEach(lsaCode => {
+        if (availableLSAData[lsaCode]) {
+            availableLSAData[lsaCode].items.forEach(item => {
+                selectedItemIds.push(item.item_id);
+            });
+        }
+    });
+    
+    if (!confirm(`Opravdu chcete importovat ${selectedAvailableLSA.size} LSA (${selectedItemIds.length} palet) do této zakázky?`)) {
+        return;
+    }
+    
+    const importBtn = document.getElementById('importLSABtn');
+    const originalText = importBtn.innerHTML;
+    importBtn.disabled = true;
+    importBtn.innerHTML = '⏳ Importuji...';
+    
+    fetch('/import_lsa_to_order', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            target_order_id: orderId,
+            selected_items: selectedItemIds
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showSuccessMessage(data.message);
+            
+            // Reset stavu
+            selectedAvailableLSA.clear();
+            availableLSAData = {};
+            
+            // Schovat kontejner
+            document.getElementById('availableLSAContainer').style.display = 'none';
+            document.getElementById('loadAvailableLSABtn').innerHTML = '🔍 Zobrazit dostupné LSA';
+            
+            // Obnovit stránku po úspěšném importu
+            setTimeout(() => {
+                location.reload();
+            }, 2000);
+        } else {
+            showErrorMessage(data.error);
+        }
+    })
+    .catch(error => {
+        showErrorMessage('Chyba při importu: ' + error);
+    })
+    .finally(() => {
+        importBtn.disabled = false;
+        importBtn.innerHTML = originalText;
+    });
+}
+
+// Funkce pro mazání aktuální zakázky
+function deleteCurrentOrder(orderId, orderName) {
+    if (!orderId) {
+        showErrorMessage('Chyba: ID zakázky nenalezeno');
+        return;
+    }
+    
+    if (!confirm(`⚠️ POZOR: Opravdu chcete smazat zakázku "${orderName}"?\n\n❌ Tato akce je NEVRATNÁ!\n\n✅ Zakázka bude smazána pouze pokud neobsahuje žádné palety.\n\nPokračovat?`)) {
+        return;
+    }
+    
+    // Najdeme tlačítko pro loading state
+    const button = event.target;
+    const originalText = button.innerHTML;
+    button.disabled = true;
+    button.innerHTML = '⏳ Mazání...';
+    
+    fetch(`/delete_order/${orderId}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Zobrazit success zprávu
+            showSuccessMessage(data.message);
+            
+            // Přesměrovat na seznam zakázek po úspěšném smazání
+            setTimeout(() => {
+                window.location.href = '/loading_orders';
+            }, 2000);
+        } else {
+            // Zobrazit error zprávu
+            showErrorMessage(data.error);
+            
+            // Obnovit tlačítko
+            button.disabled = false;
+            button.innerHTML = originalText;
+        }
+    })
+    .catch(error => {
+        showErrorMessage('Chyba při mazání zakázky: ' + error);
+        
+        // Obnovit tlačítko
+        button.disabled = false;
+        button.innerHTML = originalText;
+    });
+}
+
+// === LSA TABULKY FUNKCIONALITA ===
+let lsaTablesData = [];
+let currentLSATableItems = [];
+let selectedLSATableItems = new Set();
+
+function loadLSATables() {
+    const container = document.getElementById('lsaTablesContainer');
+    const btn = document.getElementById('loadLSATablesBtn');
+    
+    if (container.style.display === 'none') {
+        // Zobrazit a načíst data
+        container.style.display = 'block';
+        btn.innerHTML = '🔼 Skrýt LSA tabulky';
+        
+        // Načti dostupné LSA tabulky
+        fetch('/lsa_tables')
+            .then(response => response.text())
+            .then(html => {
+                // Extrahujeme tabulky z odpovědi (je to celá HTML stránka)
+                // Místo toho použijeme API endpoint
+                return fetch('/get_lsa_tables_list');
+            })
+            .then(response => response.json())
+            .then(data => {
+                lsaTablesData = data.tables || [];
+                populateLSATableSelect();
+            })
+            .catch(error => {
+                showErrorMessage('Chyba při načítání LSA tabulek: ' + error);
+                console.error('Error loading LSA tables:', error);
+            });
+    } else {
+        // Skrýt
+        container.style.display = 'none';
+        btn.innerHTML = '🔍 Zobrazit LSA tabulky';
+        resetLSATablesState();
+    }
+}
+
+function populateLSATableSelect() {
+    const select = document.getElementById('lsaTableSelect');
+    select.innerHTML = '<option value="">-- Vyberte LSA tabulku --</option>';
+    
+    lsaTablesData.forEach(table => {
+        const option = document.createElement('option');
+        option.value = table.id;
+        option.textContent = `${table.name} (${table.rows_count} LSA)`;
+        select.appendChild(option);
+    });
+}
+
+function loadLSATableItems(tableId) {
+    const searchContainer = document.getElementById('lsaTableSearchContainer');
+    const itemsContainer = document.getElementById('lsaTableItemsContainer');
+    const noSelected = document.getElementById('noLSATableSelected');
+    const noItems = document.getElementById('noLSATableItems');
+    
+    if (!tableId) {
+        searchContainer.style.display = 'none';
+        itemsContainer.style.display = 'none';
+        noSelected.style.display = 'block';
+        noItems.style.display = 'none';
+        currentLSATableItems = [];
+        selectedLSATableItems.clear();
+        updateLSATableSummary();
+        return;
+    }
+    
+    noSelected.style.display = 'none';
+    
+    // Načti obsah tabulky
+    fetch(`/get_lsa_table/${tableId}`)
+        .then(response => response.json())
+        .then(data => {
+            currentLSATableItems = data.items || [];
+            
+            if (currentLSATableItems.length > 0) {
+                searchContainer.style.display = 'block';
+                itemsContainer.style.display = 'block';
+                noItems.style.display = 'none';
+                renderLSATableItems(currentLSATableItems);
+            } else {
+                searchContainer.style.display = 'none';
+                itemsContainer.style.display = 'none';
+                noItems.style.display = 'block';
+            }
+            
+            selectedLSATableItems.clear();
+            updateLSATableSummary();
+        })
+        .catch(error => {
+            showErrorMessage('Chyba při načítání obsahu tabulky: ' + error);
+            console.error('Error loading LSA table items:', error);
+        });
+}
+
+function renderLSATableItems(items) {
+    const tbody = document.getElementById('lsaTableItemsTableBody');
+    tbody.innerHTML = '';
+    
+    items.forEach(item => {
+        const usageStatus = item.used_in_orders && item.used_in_orders.length > 0
+            ? `<span class="badge bg-warning">Použito ${item.used_in_orders.length}×</span>`
+            : '<span class="badge bg-success">Dostupné</span>';
+        
+        const row = `
+            <tr data-item-id="${item.id}">
+                <td>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" 
+                               id="lsaTableItem_${item.id}" 
+                               onchange="toggleLSATableItemSelection(${item.id}, this.checked)">
+                    </div>
+                </td>
+                <td><strong>${item.lsa || ''}</strong></td>
+                <td>${item.lsa_designation || ''}</td>
+                <td>${item.pallet_text || ''}</td>
+                <td class="text-end">${item.length_m ? item.length_m.toFixed(2) : '0.00'}</td>
+                <td>${usageStatus}</td>
+            </tr>
+        `;
+        tbody.innerHTML += row;
+    });
+}
+
+function filterLSATableItems() {
+    const searchTerm = document.getElementById('lsaTableSearchInput').value.toLowerCase();
+    
+    if (!searchTerm) {
+        renderLSATableItems(currentLSATableItems);
+        return;
+    }
+    
+    const filteredItems = currentLSATableItems.filter(item => {
+        return (item.lsa && item.lsa.toLowerCase().includes(searchTerm)) ||
+               (item.lsa_designation && item.lsa_designation.toLowerCase().includes(searchTerm)) ||
+               (item.pallet_text && item.pallet_text.toLowerCase().includes(searchTerm));
+    });
+    
+    renderLSATableItems(filteredItems);
+}
+
+function toggleSelectAllLSATableItems() {
+    const selectAll = document.getElementById('selectAllLSATableItems');
+    const checkboxes = document.querySelectorAll('#lsaTableItemsTableBody input[type="checkbox"]');
+    
+    checkboxes.forEach(checkbox => {
+        const itemId = parseInt(checkbox.id.replace('lsaTableItem_', ''));
+        checkbox.checked = selectAll.checked;
+        toggleLSATableItemSelection(itemId, selectAll.checked);
+    });
+}
+
+function toggleLSATableItemSelection(itemId, selected) {
+    if (selected) {
+        selectedLSATableItems.add(itemId);
+    } else {
+        selectedLSATableItems.delete(itemId);
+    }
+    
+    updateLSATableSummary();
+    updateSelectAllLSATableCheckbox();
+}
+
+function updateSelectAllLSATableCheckbox() {
+    const selectAll = document.getElementById('selectAllLSATableItems');
+    const visibleCheckboxes = document.querySelectorAll('#lsaTableItemsTableBody input[type="checkbox"]:not([disabled])');
+    const checkedBoxes = document.querySelectorAll('#lsaTableItemsTableBody input[type="checkbox"]:checked');
+    
+    if (visibleCheckboxes.length === 0) {
+        selectAll.indeterminate = false;
+        selectAll.checked = false;
+    } else if (checkedBoxes.length === visibleCheckboxes.length) {
+        selectAll.indeterminate = false;
+        selectAll.checked = true;
+    } else if (checkedBoxes.length > 0) {
+        selectAll.indeterminate = true;
+        selectAll.checked = false;
+    } else {
+        selectAll.indeterminate = false;
+        selectAll.checked = false;
+    }
+}
+
+function updateLSATableSummary() {
+    const selectedCount = selectedLSATableItems.size;
+    let totalLength = 0;
+    
+    selectedLSATableItems.forEach(itemId => {
+        const item = currentLSATableItems.find(i => i.id === itemId);
+        if (item && item.length_m) {
+            totalLength += item.length_m;
+        }
+    });
+    
+    document.getElementById('selectedLSATableCount').textContent = selectedCount;
+    document.getElementById('selectedLSATableLength').textContent = totalLength.toFixed(2);
+    
+    const importBtn = document.getElementById('importLSAFromTableBtn');
+    importBtn.disabled = selectedCount === 0;
+}
+
+function importSelectedLSAFromTable(orderId) {
+    if (selectedLSATableItems.size === 0) {
+        showErrorMessage('Nebyla vybrána žádná LSA');
+        return;
+    }
+    
+    const selectedItems = Array.from(selectedLSATableItems);
+    
+    if (!confirm(`Opravdu chcete importovat ${selectedItems.length} LSA z tabulky do této zakázky?`)) {
+        return;
+    }
+    
+    const importBtn = document.getElementById('importLSAFromTableBtn');
+    const originalText = importBtn.innerHTML;
+    importBtn.disabled = true;
+    importBtn.innerHTML = '⏳ Importuji...';
+    
+    fetch('/import_lsa_from_table', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            order_id: orderId,
+            lsa_item_ids: selectedItems
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showSuccessMessage(data.message);
+            
+            // Reset stavu
+            selectedLSATableItems.clear();
+            currentLSATableItems = [];
+            
+            // Schovat kontejner
+            document.getElementById('lsaTablesContainer').style.display = 'none';
+            document.getElementById('loadLSATablesBtn').innerHTML = '🔍 Zobrazit LSA tabulky';
+            
+            // Obnovit stránku po úspěšném importu
+            setTimeout(() => {
+                location.reload();
+            }, 2000);
+        } else {
+            showErrorMessage(data.message);
+        }
+    })
+    .catch(error => {
+        showErrorMessage('Chyba při importu z tabulky: ' + error);
+        console.error('Error importing from LSA table:', error);
+    })
+    .finally(() => {
+        importBtn.disabled = false;
+        importBtn.innerHTML = originalText;
+    });
+}
+
+function resetLSATablesState() {
+    selectedLSATableItems.clear();
+    currentLSATableItems = [];
+    lsaTablesData = [];
+    
+    document.getElementById('lsaTableSelect').value = '';
+    document.getElementById('lsaTableSearchInput').value = '';
+    document.getElementById('lsaTableSearchContainer').style.display = 'none';
+    document.getElementById('lsaTableItemsContainer').style.display = 'none';
+    document.getElementById('noLSATableSelected').style.display = 'block';
+    document.getElementById('noLSATableItems').style.display = 'none';
+    
+    updateLSATableSummary();
+}
+
 </script>
 
 {% endblock %}

@@ -80,9 +80,41 @@ class ImportedFile(db.Model):
     
     order = db.relationship('Order', backref=db.backref('imported_files', lazy=True))
 
+# Nové modely pro centralizované LSA tabulky
+class LSATable(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(120), nullable=False)  # Název tabulky LSA
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    filename = db.Column(db.String(255))  # Původní název souboru
+    file_hash = db.Column(db.String(64))  # Hash souboru pro duplicity
+    rows_count = db.Column(db.Integer, default=0)  # Počet řádků v tabulce
+    
+    def __repr__(self):
+        return f'<LSATable {self.id} {self.name}>'
+
+class LSAItem(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    table_id = db.Column(db.Integer, db.ForeignKey('lsa_table.id'), nullable=False)
+    date_received = db.Column(db.String(64))  # Column A - Date when pallet overview was received
+    lsa_designation = db.Column(db.String(64))  # Column B - LSA designation (CZEX, CZU atd.)
+    lsa = db.Column(db.String(64))  # Column C - LSA code
+    pallet_text = db.Column(db.String(255))  # Column D - Item text
+    qty = db.Column(db.Integer, default=1)
+    weight = db.Column(db.Float, default=0.0)
+    length_m = db.Column(db.Float, default=0.0)  # Column E - Length in meters
+    import_order = db.Column(db.Integer, default=0)  # Původní pořadí importu
+    used_in_orders = db.Column(db.Text)  # JSON seznam order_id kde byla použita
+    
+    table = db.relationship('LSATable', backref=db.backref('items', lazy=True))
+    
+    def __repr__(self):
+        return f'<LSAItem {self.id} LSA:{self.lsa} len:{self.length_m} m>'
+
 class PalletItem(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     order_id = db.Column(db.Integer, db.ForeignKey('order.id'), nullable=False)
+    # Reference na LSA item (pokud je z tabulky)
+    lsa_item_id = db.Column(db.Integer, db.ForeignKey('lsa_item.id'), nullable=True)
     date_received = db.Column(db.String(64))  # Column A - Date when pallet overview was received
     lsa_designation = db.Column(db.String(64))  # Column B - LSA designation (CZEX, CZU atd.)
     lsa = db.Column(db.String(64))  # Column C - LSA code
@@ -92,8 +124,10 @@ class PalletItem(db.Model):
     length_m = db.Column(db.Float, default=0.0)  # Column E - Length in meters
     assigned_lane = db.Column(db.Integer, default=0)  # 0=unassigned,1,2,3 lanes
     import_order = db.Column(db.Integer, default=0)  # Původní pořadí importu
+    loaded = db.Column(db.Boolean, default=False)  # Označení skutečně naložených palet
 
     order = db.relationship('Order', backref=db.backref('items', lazy=True))
+    lsa_item = db.relationship('LSAItem', backref=db.backref('pallet_items', lazy=True))
 
     def __repr__(self):
         return f'<Pallet {self.id} LSA:{self.lsa} len:{self.length_m} m lane:{self.assigned_lane}>'
@@ -113,6 +147,18 @@ def init_db():
                 print("Added 'delivered' column to Order table")
     except Exception as e:
         print(f"Migration note: {e}")
+    
+    # Migrace pro přidání sloupce 'loaded' do PalletItem
+    try:
+        with db.engine.begin() as conn:
+            result = conn.execute(db.text("PRAGMA table_info(pallet_item)"))
+            columns = [row[1] for row in result.fetchall()]
+            
+            if 'loaded' not in columns:
+                conn.execute(db.text("ALTER TABLE pallet_item ADD COLUMN loaded BOOLEAN DEFAULT 0"))
+                print("Added 'loaded' column to PalletItem table")
+    except Exception as e:
+        print(f"Migration note for PalletItem: {e}")
 
 def get_lsa_color(lsa_code):
     """Vrátí konzistentní barvu pro LSA kód"""
@@ -787,6 +833,88 @@ def remove_lsa():
     flash(f'Přesunuto {count} palet s LSA {lsa} do zakázky "Vyřazené z nakládky" (uloženo na později)', 'info')
     return redirect(url_for('order_view', order_id=order_id))
 
+@app.route('/create_test_order', methods=['POST'])
+def create_test_order():
+    """Vytvoří testovací prázdnou zakázku pro testování delete funkcionality"""
+    try:
+        # Najdi poslední zakázku pro generování čísla
+        last_order = Order.query.order_by(Order.id.desc()).first()
+        if last_order and last_order.name.isdigit():
+            next_number = int(last_order.name) + 1
+        else:
+            next_number = 999  # Test číslo
+        
+        test_order = Order(
+            name=f'{next_number:03d}',
+            closed=False,
+            saved_for_later=False
+        )
+        
+        db.session.add(test_order)
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': f'Testovací zakázka "{test_order.name}" byla vytvořena',
+            'order_id': test_order.id
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            'success': False,
+            'error': f'Chyba při vytváření testovací zakázky: {str(e)}'
+        })
+
+@app.route('/delete_order/<int:order_id>', methods=['POST'])
+def delete_order(order_id):
+    """Smazání prázdné zakázky (pouze pokud neobsahuje žádné palety)"""
+    try:
+        order = Order.query.get_or_404(order_id)
+        
+        # Kontrola, zda zakázka neobsahuje palety
+        pallet_count = PalletItem.query.filter_by(order_id=order.id).count()
+        
+        if pallet_count > 0:
+            return jsonify({
+                'success': False, 
+                'error': f'Zakázku nelze smazat - obsahuje {pallet_count} palet. Nejprve přesuňte nebo odstraňte všechny palety.'
+            })
+        
+        # Kontrola, zda se nejedná o speciální zakázky
+        if order.name == 'Vyřazené z nakládky':
+            return jsonify({
+                'success': False, 
+                'error': 'Systémovou zakázku "Vyřazené z nakládky" nelze smazat.'
+            })
+        
+        # Kontrola uzavřených zakázek
+        if order.closed:
+            return jsonify({
+                'success': False, 
+                'error': 'Uzavřené zakázky nelze mazat. Nejprve zakázku znovu otevřete.'
+            })
+        
+        order_name = order.name
+        
+        # Smazání importovaných souborů souvisejících se zakázkou
+        ImportedFile.query.filter_by(order_id=order.id).delete()
+        
+        # Smazání zakázky
+        db.session.delete(order)
+        db.session.commit()
+        
+        return jsonify({
+            'success': True, 
+            'message': f'Prázdná zakázka "{order_name}" byla úspěšně smazána.'
+        })
+        
+    except Exception as e:
+        return jsonify({
+            'success': False, 
+            'error': f'Chyba při mazání zakázky: {str(e)}'
+        })
+
 @app.route('/close_order', methods=['POST'])
 def close_order():
     order_id = int(request.form.get('order_id'))
@@ -1146,6 +1274,146 @@ def update_order_emails(order_id):
     
     return redirect(url_for('order_view', order_id=order_id))
 
+@app.route('/get_available_lsa/<int:order_id>')
+def get_available_lsa(order_id):
+    """API endpoint pro získání všech dostupných LSA z jiných zakázek"""
+    try:
+        current_order = Order.query.get_or_404(order_id)
+        
+        # Získáme všechny LSA z current zakázky (abychom je vyfiltrovali)
+        current_lsa_codes = set(item.lsa for item in current_order.items)
+        
+        # Najdeme všechny dostupné LSA z různých zdrojů
+        available_lsa = []
+        
+        # 1. LSA z zakázek uložených na později (kromě current)
+        saved_orders = Order.query.filter(
+            Order.saved_for_later == True,
+            Order.id != order_id
+        ).all()
+        
+        for order in saved_orders:
+            for item in order.items:
+                if item.lsa not in current_lsa_codes:
+                    available_lsa.append({
+                        'item_id': item.id,
+                        'lsa': item.lsa,
+                        'lsa_designation': item.lsa_designation,
+                        'date_received': item.date_received,
+                        'pallet_text': item.pallet_text,
+                        'length_m': item.length_m,
+                        'weight': item.weight,
+                        'source_order_id': order.id,
+                        'source_order_name': order.name,
+                        'source_type': 'saved_for_later'
+                    })
+        
+        # 2. LSA z neuzavřených zakázek (kromě current a saved_for_later)
+        open_orders = Order.query.filter(
+            Order.closed == False,
+            Order.saved_for_later == False,
+            Order.id != order_id
+        ).all()
+        
+        for order in open_orders:
+            for item in order.items:
+                if item.lsa not in current_lsa_codes and item.assigned_lane == 0:  # Pouze nepřiřazené
+                    available_lsa.append({
+                        'item_id': item.id,
+                        'lsa': item.lsa,
+                        'lsa_designation': item.lsa_designation,
+                        'date_received': item.date_received,
+                        'pallet_text': item.pallet_text,
+                        'length_m': item.length_m,
+                        'weight': item.weight,
+                        'source_order_id': order.id,
+                        'source_order_name': order.name,
+                        'source_type': 'open_order'
+                    })
+        
+        # Seskupíme podle LSA kódu
+        lsa_groups = {}
+        for item in available_lsa:
+            lsa_code = item['lsa']
+            if lsa_code not in lsa_groups:
+                lsa_groups[lsa_code] = {
+                    'lsa': lsa_code,
+                    'lsa_designation': item['lsa_designation'],
+                    'count': 0,
+                    'total_weight': 0.0,
+                    'lengths': {},
+                    'sources': set(),
+                    'items': []
+                }
+            
+            lsa_groups[lsa_code]['count'] += 1
+            lsa_groups[lsa_code]['total_weight'] += item['weight']
+            lsa_groups[lsa_code]['sources'].add(f"{item['source_order_name']} ({item['source_type']})")
+            lsa_groups[lsa_code]['items'].append(item)
+            
+            # Grupování podle délky
+            length_key = f"{item['length_m']:.1f}m"
+            if length_key not in lsa_groups[lsa_code]['lengths']:
+                lsa_groups[lsa_code]['lengths'][length_key] = 0
+            lsa_groups[lsa_code]['lengths'][length_key] += 1
+        
+        # Převedeme sources set na list pro JSON serialization
+        for lsa_code in lsa_groups:
+            lsa_groups[lsa_code]['sources'] = list(lsa_groups[lsa_code]['sources'])
+        
+        return jsonify({
+            'success': True,
+            'available_lsa': lsa_groups,
+            'total_count': len(available_lsa)
+        })
+        
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'Chyba při načítání dostupných LSA: {str(e)}'})
+
+@app.route('/import_lsa_to_order', methods=['POST'])
+def import_lsa_to_order():
+    """API endpoint pro import vybraných LSA do zakázky"""
+    try:
+        data = request.get_json()
+        target_order_id = data.get('target_order_id')
+        selected_items = data.get('selected_items', [])  # List of item IDs
+        
+        if not target_order_id or not selected_items:
+            return jsonify({'success': False, 'error': 'Chybí parametry'})
+        
+        target_order = Order.query.get_or_404(target_order_id)
+        
+        # Najdeme nejvyšší import_order v cílové zakázce
+        max_import_order = db.session.query(db.func.max(PalletItem.import_order)).filter_by(order_id=target_order_id).scalar() or 0
+        
+        imported_count = 0
+        imported_lsa = set()
+        
+        for item_id in selected_items:
+            item = PalletItem.query.get(item_id)
+            if item and item.order_id != target_order_id:
+                # Přesuneme item do cílové zakázky
+                old_order_id = item.order_id
+                item.order_id = target_order_id
+                item.assigned_lane = 0  # Reset lane assignment
+                max_import_order += 1
+                item.import_order = max_import_order
+                
+                imported_count += 1
+                imported_lsa.add(item.lsa)
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': f'Importováno {imported_count} palet z {len(imported_lsa)} LSA',
+            'imported_count': imported_count,
+            'imported_lsa': list(imported_lsa)
+        })
+        
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'Chyba při importu LSA: {str(e)}'})
+
 @app.route('/test_email')
 def test_email():
     """Testovací endpoint pro ověření SMTP nastavení"""
@@ -1247,6 +1515,171 @@ def print_loading_sheet(order_id):
                          order=order, 
                          lsa_summary=lsa_summary,
                          current_time=current_time)
+
+@app.route('/reopen_order/<int:order_id>', methods=['POST'])
+def reopen_order(order_id):
+    """Znovu otevře uzavřenou zakázku (např. kvůli zrušení dopravce)"""
+    order = Order.query.get_or_404(order_id)
+    
+    if not order.closed:
+        flash('Zakázka již není uzavřená', 'warning')
+        return redirect(url_for('order_view', order_id=order.id))
+    
+    # Reset stavu zakázky
+    order.closed = False
+    order.is_loaded = False
+    order.delivered = False
+    
+    # Zachováme informace o dopravci pro případnou potřebu
+    # ale můžeme je vyčistit podle preference
+    clear_carrier_info = request.form.get('clear_carrier_info') == 'on'
+    
+    if clear_carrier_info:
+        order.carrier_name = None
+        order.carrier_email = None
+        order.truck_license_plate = None
+        order.pickup_datetime = None
+        # Zachováme loading_emails a user_email pro další použití
+    
+    # Reset loading statusu všech palet
+    for item in order.items:
+        item.loaded = False
+    
+    db.session.commit()
+    
+    action_text = "a vymazány údaje dopravce" if clear_carrier_info else "se zachováním údajů dopravce"
+    flash(f'Zakázka "{order.name}" byla znovu otevřena {action_text}', 'success')
+    
+    return redirect(url_for('order_view', order_id=order.id))
+
+@app.route('/mark_lsa_loaded', methods=['POST'])
+def mark_lsa_loaded():
+    """Označení všech palet s konkrétním LSA jako naložené"""
+    try:
+        data = request.get_json()
+        order_id = data.get('order_id')
+        lsa = data.get('lsa')
+        loaded = data.get('loaded', True)
+        
+        if not order_id or not lsa:
+            return jsonify({'success': False, 'error': 'Chybí parametry order_id nebo lsa'})
+        
+        # Najdeme všechny palety s tímto LSA v zakázce
+        items = PalletItem.query.filter_by(order_id=order_id, lsa=lsa).all()
+        
+        if not items:
+            return jsonify({'success': False, 'error': f'Nenalezeny žádné palety s LSA {lsa}'})
+        
+        # Označíme všechny palety
+        count = 0
+        for item in items:
+            item.loaded = loaded
+            count += 1
+        
+        db.session.commit()
+        
+        status_text = "naložené" if loaded else "nenačítané"
+        return jsonify({
+            'success': True, 
+            'message': f'LSA {lsa} označeno jako {status_text} ({count} palet)',
+            'count': count,
+            'lsa': lsa,
+            'loaded': loaded
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': f'Chyba při aktualizaci: {str(e)}'})
+
+@app.route('/return_unloaded_lsa', methods=['POST'])
+def return_unloaded_lsa():
+    """Vrácení nenačítaných palet zpět do fronty (vytvoří novou zakázku nebo přidá do existující)"""
+    try:
+        data = request.get_json()
+        order_id = data.get('order_id')
+        
+        if not order_id:
+            return jsonify({'success': False, 'error': 'Chybí parametr order_id'})
+        
+        order = Order.query.get_or_404(order_id)
+        
+        # Najdeme všechny palety, které nejsou označené jako naložené
+        unloaded_items = PalletItem.query.filter_by(order_id=order.id, loaded=False).all()
+        
+        if not unloaded_items:
+            return jsonify({'success': False, 'error': 'Všechny palety jsou označené jako naložené'})
+        
+        # Získej nebo vytvoř zakázku pro nenaložené LSA
+        unloaded_order = get_or_create_unloaded_order()
+        
+        # Přesuň nenaložené palety do zakázky nenaložených LSA
+        count = 0
+        lsa_list = []
+        for item in unloaded_items:
+            item.order_id = unloaded_order.id
+            item.assigned_lane = 0  # Reset lane assignment
+            item.loaded = False     # Resetovat loading status
+            if item.lsa not in lsa_list:
+                lsa_list.append(item.lsa)
+            count += 1
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True, 
+            'message': f'Přesunuto {count} nenaložených palet do zakázky "Vyřazené z nakládky"',
+            'count': count,
+            'lsa_codes': lsa_list,
+            'unloaded_order_id': unloaded_order.id
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': f'Chyba při přesunu: {str(e)}'})
+
+@app.route('/get_loading_status/<int:order_id>')
+def get_loading_status(order_id):
+    """Získání statistik načítání pro konkrétní zakázku"""
+    try:
+        order = Order.query.get_or_404(order_id)
+        
+        # Seskupení podle LSA
+        lsa_status = {}
+        for item in order.items:
+            if item.assigned_lane in (1, 2, 3):  # Pouze přiřazené palety
+                if item.lsa not in lsa_status:
+                    lsa_status[item.lsa] = {
+                        'total': 0,
+                        'loaded': 0,
+                        'percentage': 0
+                    }
+                
+                lsa_status[item.lsa]['total'] += 1
+                if item.loaded:
+                    lsa_status[item.lsa]['loaded'] += 1
+        
+        # Výpočet procent
+        for lsa, status in lsa_status.items():
+            if status['total'] > 0:
+                status['percentage'] = round((status['loaded'] / status['total']) * 100, 1)
+        
+        # Celkové statistiky
+        total_pallets = sum(status['total'] for status in lsa_status.values())
+        loaded_pallets = sum(status['loaded'] for status in lsa_status.values())
+        overall_percentage = round((loaded_pallets / total_pallets) * 100, 1) if total_pallets > 0 else 0
+        
+        return jsonify({
+            'success': True,
+            'lsa_status': lsa_status,
+            'overall': {
+                'total': total_pallets,
+                'loaded': loaded_pallets,
+                'percentage': overall_percentage
+            }
+        })
+        
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'Chyba při načítání statistik: {str(e)}'})
 
 @app.route('/backup_database')
 def backup_database():
@@ -1422,6 +1855,246 @@ def restore_database():
         flash(f'Chyba při obnově databáze: {str(e)}', 'danger')
     
     return redirect(url_for('settings'))
+
+# LSA Table Management
+@app.route('/lsa_tables')
+def lsa_tables():
+    """Stránka pro správu LSA tabulek"""
+    tables = LSATable.query.order_by(LSATable.created_at.desc()).all()
+    return render_template('lsa_tables.html', tables=tables)
+
+@app.route('/upload_lsa_table', methods=['POST'])
+def upload_lsa_table():
+    """Upload nové LSA tabulky"""
+    if 'file' not in request.files:
+        flash('Nebyl vybrán žádný soubor', 'danger')
+        return redirect(url_for('lsa_tables'))
+    
+    file = request.files['file']
+    if file.filename == '':
+        flash('Nebyl vybrán žádný soubor', 'danger')
+        return redirect(url_for('lsa_tables'))
+    
+    if not file.filename.lower().endswith(('.xlsx', '.xls', '.csv')):
+        flash('Podporované formáty: .xlsx, .xls, .csv', 'danger')
+        return redirect(url_for('lsa_tables'))
+    
+    try:
+        # Spočítej hash souboru
+        file_content = file.read()
+        file_hash = hashlib.md5(file_content).hexdigest()
+        
+        # Zkontroluj duplicity
+        existing_table = LSATable.query.filter_by(file_hash=file_hash).first()
+        if existing_table:
+            flash(f'Tabulka s tímto obsahem již existuje: {existing_table.name}', 'warning')
+            return redirect(url_for('lsa_tables'))
+        
+        # Reset file pointer
+        file.seek(0)
+        
+        # Načti data - přeskoč první 2 řádky (hlavička)
+        if file.filename.lower().endswith('.csv'):
+            df = pd.read_csv(file, skiprows=2)
+        else:
+            df = pd.read_excel(file, skiprows=2)
+        
+        # Pro Excel soubory přejmenuj sloupce na A, B, C, D, E pokud mají číselné názvy
+        if len(df.columns) >= 5:
+            df.columns = [f'{chr(65+i)}' for i in range(len(df.columns))]  # A, B, C, D, E, F, ...
+        
+        # Kontrola sloupců
+        expected_columns = ['A', 'B', 'C', 'D', 'E']
+        if not all(col in df.columns for col in expected_columns):
+            available_columns = list(df.columns)
+            flash(f'Soubor musí mít alespoň 5 sloupců. Nalezené sloupce: {", ".join(available_columns)}. Očekávané: {", ".join(expected_columns)}', 'danger')
+            return redirect(url_for('lsa_tables'))
+        
+        # Vytvoř LSA tabulku
+        table_name = request.form.get('table_name', '').strip()
+        if not table_name:
+            # Automatický název ze souboru
+            table_name = os.path.splitext(file.filename)[0]
+        
+        lsa_table = LSATable(
+            name=table_name,
+            filename=file.filename,
+            file_hash=file_hash,
+            rows_count=len(df)
+        )
+        db.session.add(lsa_table)
+        db.session.flush()  # Pro získání ID
+        
+        # Import dat
+        imported_count = 0
+        for index, row in df.iterrows():
+            # Kontrola prázdných řádků a hlavičkových řádků
+            if pd.isna(row['C']) or str(row['C']).strip() == '':
+                continue
+            
+            # Přeskoč řádky s hlavičkami (např. "LSA kód", "Text palety" atd.)
+            lsa_code = str(row['C']).strip()
+            if lsa_code.lower() in ['lsa kód', 'lsa kod', 'lsa', 'lsa_kod', 'lsa_code']:
+                continue
+            
+            # Přeskoč nečíselné LSA kódy (pravděpodobně hlavičky)
+            if not any(char.isdigit() for char in lsa_code):
+                continue
+                
+            try:
+                length_val = float(row['E']) if pd.notna(row['E']) and str(row['E']).strip() != '' else 0.0
+            except (ValueError, TypeError):
+                length_val = 0.0
+            
+            lsa_item = LSAItem(
+                table_id=lsa_table.id,
+                date_received=str(row['A']) if pd.notna(row['A']) else '',
+                lsa_designation=str(row['B']) if pd.notna(row['B']) else '',
+                lsa=str(row['C']) if pd.notna(row['C']) else '',
+                pallet_text=str(row['D']) if pd.notna(row['D']) else '',
+                length_m=length_val,
+                import_order=index + 1,
+                used_in_orders='[]'  # Prázdný JSON array
+            )
+            db.session.add(lsa_item)
+            imported_count += 1
+        
+        # Aktualizuj počet řádků
+        lsa_table.rows_count = imported_count
+        db.session.commit()
+        
+        flash(f'LSA tabulka "{table_name}" byla úspěšně importována ({imported_count} řádků)', 'success')
+        
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Chyba při importu LSA tabulky: {str(e)}', 'danger')
+    
+    return redirect(url_for('lsa_tables'))
+
+@app.route('/delete_lsa_table/<int:table_id>', methods=['POST'])
+def delete_lsa_table(table_id):
+    """Smazání LSA tabulky"""
+    table = LSATable.query.get_or_404(table_id)
+    
+    # Zkontroluj, zda nejsou LSA použita v zakázkách
+    used_items = LSAItem.query.filter_by(table_id=table_id).filter(LSAItem.used_in_orders != '[]').all()
+    if used_items:
+        flash(f'Nelze smazat tabulku "{table.name}" - obsahuje LSA použitá v zakázkách', 'danger')
+        return redirect(url_for('lsa_tables'))
+    
+    try:
+        # Smaž všechny LSA itemy
+        LSAItem.query.filter_by(table_id=table_id).delete()
+        # Smaž tabulku
+        db.session.delete(table)
+        db.session.commit()
+        
+        flash(f'LSA tabulka "{table.name}" byla smazána', 'success')
+        
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Chyba při mazání tabulky: {str(e)}', 'danger')
+    
+    return redirect(url_for('lsa_tables'))
+
+@app.route('/get_lsa_tables_list')
+def get_lsa_tables_list():
+    """API endpoint pro seznam LSA tabulek"""
+    tables = LSATable.query.order_by(LSATable.created_at.desc()).all()
+    
+    result = {
+        'tables': [{
+            'id': table.id,
+            'name': table.name,
+            'filename': table.filename,
+            'rows_count': table.rows_count,
+            'created_at': table.created_at.isoformat()
+        } for table in tables]
+    }
+    
+    return jsonify(result)
+
+@app.route('/get_lsa_table/<int:table_id>')
+def get_lsa_table(table_id):
+    """API endpoint pro získání obsahu LSA tabulky"""
+    table = LSATable.query.get_or_404(table_id)
+    items = LSAItem.query.filter_by(table_id=table_id).order_by(LSAItem.import_order).all()
+    
+    result = {
+        'table': {
+            'id': table.id,
+            'name': table.name,
+            'created_at': table.created_at.isoformat(),
+            'rows_count': table.rows_count
+        },
+        'items': [{
+            'id': item.id,
+            'date_received': item.date_received,
+            'lsa_designation': item.lsa_designation,
+            'lsa': item.lsa,
+            'pallet_text': item.pallet_text,
+            'length_m': item.length_m,
+            'used_in_orders': json.loads(item.used_in_orders or '[]')
+        } for item in items]
+    }
+    
+    return jsonify(result)
+
+@app.route('/import_lsa_from_table', methods=['POST'])
+def import_lsa_from_table():
+    """Import vybraných LSA z tabulky do zakázky"""
+    data = request.get_json()
+    order_id = data.get('order_id')
+    lsa_item_ids = data.get('lsa_item_ids', [])
+    
+    if not order_id or not lsa_item_ids:
+        return jsonify({'success': False, 'message': 'Chybí parametry'})
+    
+    order = Order.query.get_or_404(order_id)
+    
+    try:
+        imported_count = 0
+        for lsa_item_id in lsa_item_ids:
+            lsa_item = LSAItem.query.get(lsa_item_id)
+            if not lsa_item:
+                continue
+            
+            # Vytvoř pallet item z LSA item
+            pallet_item = PalletItem(
+                order_id=order_id,
+                lsa_item_id=lsa_item_id,
+                date_received=lsa_item.date_received,
+                lsa_designation=lsa_item.lsa_designation,
+                lsa=lsa_item.lsa,
+                pallet_text=lsa_item.pallet_text,
+                length_m=lsa_item.length_m,
+                import_order=lsa_item.import_order,
+                assigned_lane=0,
+                loaded=False
+            )
+            db.session.add(pallet_item)
+            
+            # Aktualizuj used_in_orders v LSA item
+            used_orders = json.loads(lsa_item.used_in_orders or '[]')
+            if order_id not in used_orders:
+                used_orders.append(order_id)
+                lsa_item.used_in_orders = json.dumps(used_orders)
+            
+            imported_count += 1
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': f'Importováno {imported_count} LSA do zakázky "{order.name}"'
+        })
+        
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            'success': False,
+            'message': f'Chyba při importu: {str(e)}'
+        })
 
 if __name__ == '__main__':
     with app.app_context():

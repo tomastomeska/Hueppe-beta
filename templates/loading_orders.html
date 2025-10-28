@@ -1,98 +1,267 @@
 {% extends 'base.html' %}
 {% block content %}
-  <div class="row">
-    <div class="col-md-6">
+<div class="row">
+  <div class="col-md-6">
+    <div class="d-flex justify-content-between align-items-center mb-3">
       <h3>Aktivní zakázky</h3>
-      <ul class="list-group">
-        {% for o in orders if not o.saved_for_later and not o.closed %}
-          <li class="list-group-item">
-            <div class="d-flex justify-content-between align-items-center">
-              <div>
-                <a href="{{ url_for('order_view', order_id=o.id) }}">{{ o.name }}</a>
-                <br><small class="text-muted">{{ o.items|length }} palet</small>
-              </div>
-              <span class="text-muted">{{ o.created_at.strftime('%Y-%m-%d %H:%M') }}</span>
-            </div>
-          </li>
-        {% else %}
-          <li class="list-group-item">Žádné aktivní zakázky</li>
-        {% endfor %}
-      </ul>
-      
-      <h3 class="mt-4">Uložené na později</h3>
-      <ul class="list-group">
-        {% for o in orders if o.saved_for_later and not o.closed %}
-          <li class="list-group-item">
-            <div class="d-flex justify-content-between align-items-center">
-              <div>
-                <a href="{{ url_for('order_view', order_id=o.id) }}">{{ o.name }}</a>
-                <span class="badge bg-info ms-2">Uloženo</span>
-                <br><small class="text-muted">{{ o.items|length }} palet</small>
-              </div>
-              <span class="text-muted">{{ o.created_at.strftime('%Y-%m-%d %H:%M') }}</span>
-            </div>
-          </li>
-        {% else %}
-          <li class="list-group-item">Žádné uložené zakázky</li>
-        {% endfor %}
-      </ul>
-      
-      <h3 class="mt-4">Uzavřené zakázky</h3>
-      <ul class="list-group">
-        {% for o in orders if o.closed %}
-          <li class="list-group-item">
-            <div class="d-flex justify-content-between align-items-center">
-              <div>
-                <a href="{{ url_for('order_view', order_id=o.id) }}">{{ o.name }}</a>
-                <span class="badge bg-success ms-2">Uzavřeno</span>
-                {% if o.is_loaded %}
-                  <span class="badge bg-primary ms-1">✅ Naloženo</span>
-                {% else %}
-                  <span class="badge bg-warning ms-1">⏳ Čeká na naložení</span>
-                {% endif %}
-                {% if o.za_number %}
-                  <br><small class="text-muted">ZA: {{ o.za_number }}</small>
-                {% endif %}
-                {% if o.oo_number %}
-                  {% if o.za_number %} | {% else %}<br>{% endif %}
-                  <small class="text-muted">OO: {{ o.oo_number }}</small>
-                {% endif %}
-                {% if o.carrier_name %}
-                  <br><small class="text-muted">Dopravce: {{ o.carrier_name }}</small>
-                {% endif %}
-                {% if o.pickup_datetime %}
-                  <br><small class="text-muted">Nakládka: {{ o.pickup_datetime.strftime('%d.%m.%Y %H:%M') }}</small>
-                {% endif %}
-              </div>
-              <span class="text-muted">{{ o.created_at.strftime('%Y-%m-%d %H:%M') }}</span>
-            </div>
-          </li>
-        {% else %}
-          <li class="list-group-item">Žádné uzavřené zakázky</li>
-        {% endfor %}
-      </ul>
+      <button type="button" class="btn btn-sm btn-outline-secondary" onclick="createTestOrder()">
+        ➕ Testovací prázdná zakázka
+      </button>
     </div>
-    <div class="col-md-6">
-      <h3>Vytvořit zakázku</h3>
-      <form action="{{ url_for('create_order') }}" method="post">
-        <div class="mb-3">
-          <label>Jméno zakázky</label>
-          <input class="form-control" name="name" placeholder="např. Nakládka Praha 27.10.2025" required />
+    <ul class="list-group">
+      {% for o in orders if not o.saved_for_later and not o.closed %}
+      <li class="list-group-item">
+        <div class="d-flex justify-content-between align-items-center">
+          <div>
+            <a href="{{ url_for('order_view', order_id=o.id) }}">{{ o.name }}</a>
+            <br><small class="text-muted">{{ o.items|length }} palet</small>
+          </div>
+          <div class="text-end">
+            <span class="text-muted d-block">{{ o.created_at.strftime('%Y-%m-%d %H:%M') }}</span>
+            {% if o.items|length == 0 %}
+            <!-- Tlačítko pro smazání prázdné zakázky -->
+            <button type="button" class="btn btn-sm btn-outline-danger mt-1"
+              onclick="deleteOrder(this.dataset.orderId, this.dataset.orderName, this)" data-order-id="{{ o.id }}"
+              data-order-name="{{ o.name }}" title="Smazat prázdnou zakázku">
+              🗑️
+            </button>
+            {% endif %}
+          </div>
         </div>
-        <button class="btn btn-primary">Vytvořit</button>
-      </form>
-      
-      <h3 class="mt-4">Přehled</h3>
-      <div class="card">
-        <div class="card-body">
-          <p><strong>Celkem zakázek:</strong> {{ orders|length }}</p>
-          <p><strong>Aktivní:</strong> {{ orders|selectattr('closed', 'equalto', false)|selectattr('saved_for_later', 'equalto', false)|list|length }}</p>
-          <p><strong>Uložené:</strong> {{ orders|selectattr('saved_for_later', 'equalto', true)|list|length }}</p>
-          <p><strong>Uzavřené:</strong> {{ orders|selectattr('closed', 'equalto', true)|list|length }}</p>
-          <hr>
-          <a href="{{ url_for('imported_files') }}" class="btn btn-outline-info">Přehled importovaných souborů</a>
+      </li>
+      {% else %}
+      <li class="list-group-item">Žádné aktivní zakázky</li>
+      {% endfor %}
+    </ul>
+
+    <h3 class="mt-4">Uložené na později</h3>
+    <ul class="list-group">
+      {% for o in orders if o.saved_for_later and not o.closed %}
+      <li class="list-group-item">
+        <div class="d-flex justify-content-between align-items-center">
+          <div>
+            <a href="{{ url_for('order_view', order_id=o.id) }}">{{ o.name }}</a>
+            <span class="badge bg-info ms-2">Uloženo</span>
+            <br><small class="text-muted">{{ o.items|length }} palet</small>
+          </div>
+          <div class="text-end">
+            <span class="text-muted d-block">{{ o.created_at.strftime('%Y-%m-%d %H:%M') }}</span>
+            {% if o.items|length == 0 %}
+            <!-- Tlačítko pro smazání prázdné zakázky -->
+            <button type="button" class="btn btn-sm btn-outline-danger mt-1"
+              onclick="deleteOrder(this.dataset.orderId, this.dataset.orderName, this)" data-order-id="{{ o.id }}"
+              data-order-name="{{ o.name }}" title="Smazat prázdnou zakázku">
+              🗑️
+            </button>
+            {% endif %}
+          </div>
         </div>
+      </li>
+      {% else %}
+      <li class="list-group-item">Žádné uložené zakázky</li>
+      {% endfor %}
+    </ul>
+
+    <h3 class="mt-4">Uzavřené zakázky</h3>
+    <ul class="list-group">
+      {% for o in orders if o.closed %}
+      <li class="list-group-item">
+        <div class="d-flex justify-content-between align-items-center">
+          <div>
+            <a href="{{ url_for('order_view', order_id=o.id) }}">{{ o.name }}</a>
+            <span class="badge bg-success ms-2">Uzavřeno</span>
+            {% if o.is_loaded %}
+            <span class="badge bg-primary ms-1">✅ Naloženo</span>
+            {% else %}
+            <span class="badge bg-warning ms-1">⏳ Čeká na naložení</span>
+            {% endif %}
+            {% if o.za_number %}
+            <br><small class="text-muted">ZA: {{ o.za_number }}</small>
+            {% endif %}
+            {% if o.oo_number %}
+            {% if o.za_number %} | {% else %}<br>{% endif %}
+            <small class="text-muted">OO: {{ o.oo_number }}</small>
+            {% endif %}
+            {% if o.carrier_name %}
+            <br><small class="text-muted">Dopravce: {{ o.carrier_name }}</small>
+            {% endif %}
+            {% if o.pickup_datetime %}
+            <br><small class="text-muted">Nakládka: {{ o.pickup_datetime.strftime('%d.%m.%Y %H:%M') }}</small>
+            {% endif %}
+          </div>
+          <div class="text-end">
+            <span class="text-muted d-block">{{ o.created_at.strftime('%Y-%m-%d %H:%M') }}</span>
+            <!-- Rychlé tlačítko pro znovu otevření -->
+            <form method="post" action="{{ url_for('reopen_order', order_id=o.id) }}" class="d-inline mt-1">
+              <button type="submit" class="btn btn-sm btn-outline-warning"
+                onclick="return confirm('Znovu otevřít zakázku &quot;{{ o.name }}&quot;? Zachovají se údaje dopravce.')"
+                title="Znovu otevřít zakázku (zachovat údaje dopravce)">
+                🔄
+              </button>
+            </form>
+          </div>
+        </div>
+      </li>
+      {% else %}
+      <li class="list-group-item">Žádné uzavřené zakázky</li>
+      {% endfor %}
+    </ul>
+  </div>
+  <div class="col-md-6">
+    <h3>Vytvořit zakázku</h3>
+    <form action="{{ url_for('create_order') }}" method="post">
+      <div class="mb-3">
+        <label>Jméno zakázky</label>
+        <input class="form-control" name="name" placeholder="např. Nakládka Praha 27.10.2025" required />
+      </div>
+      <button class="btn btn-primary">Vytvořit</button>
+    </form>
+
+    <h3 class="mt-4">Přehled</h3>
+    <div class="card">
+      <div class="card-body">
+        <p><strong>Celkem zakázek:</strong> {{ orders|length }}</p>
+        <p><strong>Aktivní:</strong> {{ orders|selectattr('closed', 'equalto', false)|selectattr('saved_for_later',
+          'equalto', false)|list|length }}</p>
+        <p><strong>Uložené:</strong> {{ orders|selectattr('saved_for_later', 'equalto', true)|list|length }}</p>
+        <p><strong>Uzavřené:</strong> {{ orders|selectattr('closed', 'equalto', true)|list|length }}</p>
+        <hr>
+        <a href="{{ url_for('imported_files') }}" class="btn btn-outline-info">Přehled importovaných souborů</a>
       </div>
     </div>
   </div>
+</div>
 {% endblock %}
+
+<script>
+  // Funkce pro mazání prázdných zakázek
+  function deleteOrder(orderId, orderName, buttonElement) {
+    if (!orderId) {
+      alert('Chyba: ID zakázky nenalezeno');
+      return;
+    }
+
+    if (!confirm(`Opravdu chcete smazat prázdnou zakázku "${orderName}"?\n\nTato akce je nevratná!`)) {
+      return;
+    }
+
+    // Najdeme tlačítko pro loading state
+    const button = buttonElement || event.target;
+    const originalText = button.innerHTML;
+    button.disabled = true;
+    button.innerHTML = '⏳';
+
+    fetch(`/delete_order/${orderId}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      }
+    })
+      .then(response => response.json())
+      .then(data => {
+        console.log('Delete response:', data); // Debug log
+        if (data.success) {
+          // Zobrazit success zprávu
+          showSuccessMessage(data.message);
+
+          // Odstranit řádek ze seznamu
+          button.closest('li').remove();
+        } else {
+          // Zobrazit error zprávu
+          showErrorMessage(data.error || data.message || 'Neznámá chyba');
+
+          // Obnovit tlačítko
+          button.disabled = false;
+          button.innerHTML = originalText;
+        }
+      })
+      .catch(error => {
+        showErrorMessage('Chyba při mazání zakázky: ' + error);
+
+        // Obnovit tlačítko
+        button.disabled = false;
+        button.innerHTML = originalText;
+      });
+  }
+
+  // Funkce pro vytvoření testovací zakázky
+  function createTestOrder() {
+    if (!confirm('Vytvořit testovací prázdnou zakázku?\n\nTato zakázka bude prázdná a půjde smazat.')) {
+      return;
+    }
+
+    fetch('/create_test_order', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      }
+    })
+      .then(response => response.json())
+      .then(data => {
+        console.log('Create test order response:', data);
+        if (data.success) {
+          showSuccessMessage(data.message);
+          // Obnovit stránku po 2 sekundách
+          setTimeout(() => {
+            location.reload();
+          }, 2000);
+        } else {
+          showErrorMessage(data.error || 'Chyba při vytváření testovací zakázky');
+        }
+      })
+      .catch(error => {
+        showErrorMessage('Chyba při vytváření testovací zakázky: ' + error);
+      });
+  }
+
+  // Funkce pro zobrazení zpráv (používáme ze base.html theme systému)
+  function showSuccessMessage(message) {
+    showMessage(message, 'success');
+  }
+
+  function showErrorMessage(message) {
+    showMessage(message, 'error');
+  }
+
+  function showMessage(message, type) {
+    // Vytvoření toast zprávy
+    const toast = document.createElement('div');
+    toast.className = `alert alert-${type === 'success' ? 'success' : 'danger'} message-toast`;
+    toast.innerHTML = `
+        <strong>${type === 'success' ? '✅' : '❌'}</strong> ${message}
+    `;
+    toast.style.cssText = `
+        position: fixed;
+        top: 80px;
+        right: 20px;
+        z-index: 9999;
+        min-width: 300px;
+        opacity: 0;
+        transform: translateX(100%);
+        transition: all 0.4s ease;
+        border: 1px solid var(--border-color);
+        background-color: var(--${type === 'success' ? 'success' : 'danger'}-bg);
+        color: var(--text-color);
+        box-shadow: 0 4px 12px var(--shadow);
+    `;
+
+    document.body.appendChild(toast);
+
+    // Animace zobrazení
+    setTimeout(() => {
+      toast.style.opacity = '1';
+      toast.style.transform = 'translateX(0)';
+    }, 100);
+
+    // Automatické skrytí
+    setTimeout(() => {
+      toast.style.opacity = '0';
+      toast.style.transform = 'translateX(100%)';
+      setTimeout(() => {
+        if (toast.parentElement) {
+          document.body.removeChild(toast);
+        }
+      }, 400);
+    }, 4000);
+  }
+</script>
