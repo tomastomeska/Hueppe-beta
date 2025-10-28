@@ -2154,21 +2154,24 @@ def import_lsa_from_table():
             if not lsa_item:
                 continue
             
-            # Vytvoř pallet item z LSA item
-            pallet_item = PalletItem(
-                order_id=order_id,
-                lsa_item_id=lsa_item_id,
-                date_received=lsa_item.date_received,
-                lsa_designation=lsa_item.lsa_designation,
-                lsa=lsa_item.lsa,
-                pallet_text=lsa_item.pallet_text,
-                qty=lsa_item.qty,  # OPRAVA: použij počet palet z LSA
-                length_m=lsa_item.length_m,
-                import_order=lsa_item.import_order,
-                assigned_lane=0,
-                loaded=False
-            )
-            db.session.add(pallet_item)
+            # STEJNÁ LOGIKA JAKO NORMÁLNÍ UPLOAD: vytvoř samostatný řádek pro každou paletu
+            for i in range(max(1, lsa_item.qty)):
+                imported_count += 1
+                pallet_item = PalletItem(
+                    order_id=order_id,
+                    lsa_item_id=lsa_item_id,
+                    date_received=lsa_item.date_received,
+                    lsa_designation=lsa_item.lsa_designation,
+                    lsa=lsa_item.lsa,
+                    pallet_text=lsa_item.pallet_text,
+                    qty=1,  # KAŽDÝ ŘÁDEK = 1 PALETA
+                    weight=lsa_item.weight / max(1, lsa_item.qty),  # Rozdělená váha
+                    length_m=lsa_item.length_m,
+                    import_order=imported_count,
+                    assigned_lane=0,
+                    loaded=False
+                )
+                db.session.add(pallet_item)
             
             # Aktualizuj used_in_orders v LSA item
             used_orders = json.loads(lsa_item.used_in_orders or '[]')
