@@ -1951,22 +1951,20 @@ def upload_lsa_table():
         # Reset file pointer
         file.seek(0)
         
-        # Načti data - přeskoč první 2 řádky (hlavička)
+        # Načti data - použij stejnou logiku jako pro upload do zakázek
         if file.filename.lower().endswith('.csv'):
-            df = pd.read_csv(file, skiprows=2)
+            df = pd.read_csv(file, header=None)
         else:
-            df = pd.read_excel(file, skiprows=2)
+            df = pd.read_excel(file, header=None, engine='openpyxl')
         
-        # Pro Excel soubory přejmenuj sloupce na A, B, C, D, E pokud mají číselné názvy
-        if len(df.columns) >= 5:
-            df.columns = [f'{chr(65+i)}' for i in range(len(df.columns))]  # A, B, C, D, E, F, ...
-        
-        # Kontrola sloupců
-        expected_columns = ['A', 'B', 'C', 'D', 'E']
-        if not all(col in df.columns for col in expected_columns):
-            available_columns = list(df.columns)
-            flash(f'Soubor musí mít alespoň 5 sloupců. Nalezené sloupce: {", ".join(available_columns)}. Očekávané: {", ".join(expected_columns)}', 'danger')
+        # Použij stejnou logiku jako v upload funkci - od řádku 3 (index 2)
+        if df.shape[0] < 3:
+            flash('Soubor neobsahuje dostatek řádků', 'danger')
             return redirect(url_for('lsa_tables'))
+        
+        # Extrahuj data od řádku 3 (index 2) a sloupce 0-4 (A-E)
+        df_sub = df.iloc[2:, 0:5].copy()
+        df_sub.columns = ['A', 'B', 'C', 'D', 'E']  # Pojmenuj sloupce
         
         # Vytvoř LSA tabulku
         table_name = request.form.get('table_name', '').strip()
@@ -1983,39 +1981,41 @@ def upload_lsa_table():
         db.session.add(lsa_table)
         db.session.flush()  # Pro získání ID
         
-        # Import dat
+        # Import dat - použij zjednodušenou logiku bez příliš striktních filtrů
         imported_count = 0
-        for index, row in df.iterrows():
-            # Kontrola prázdných řádků a hlavičkových řádků
-            if pd.isna(row['C']) or str(row['C']).strip() == '':
-                continue
-            
-            # Přeskoč řádky s hlavičkami (např. "LSA kód", "Text palety" atd.)
-            lsa_code = str(row['C']).strip()
-            if lsa_code.lower() in ['lsa kód', 'lsa kod', 'lsa', 'lsa_kod', 'lsa_code']:
-                continue
-            
-            # Přeskoč nečíselné LSA kódy (pravděpodobně hlavičky)
-            if not any(char.isdigit() for char in lsa_code):
-                continue
-                
+        for index, row in df_sub.iterrows():
             try:
-                length_val = float(row['E']) if pd.notna(row['E']) and str(row['E']).strip() != '' else 0.0
-            except (ValueError, TypeError):
-                length_val = 0.0
-            
-            lsa_item = LSAItem(
-                table_id=lsa_table.id,
-                date_received=str(row['A']) if pd.notna(row['A']) else '',
-                lsa_designation=str(row['B']) if pd.notna(row['B']) else '',
-                lsa=str(row['C']) if pd.notna(row['C']) else '',
-                pallet_text=str(row['D']) if pd.notna(row['D']) else '',
-                length_m=length_val,
-                import_order=index + 1,
-                used_in_orders='[]'  # Prázdný JSON array
-            )
-            db.session.add(lsa_item)
-            imported_count += 1
+                # Získej data stejně jako v upload funkci
+                date_received = str(row['A']).strip() if not pd.isna(row['A']) else ''
+                lsa_designation = str(row['B']).strip() if not pd.isna(row['B']) else ''
+                lsa_code = str(row['C']).strip() if not pd.isna(row['C']) else ''
+                pallet_text = str(row['D']).strip() if not pd.isna(row['D']) else ''
+                
+                # Přeskoč prázdné LSA kódy
+                if not lsa_code or lsa_code == '' or lsa_code == 'nan':
+                    continue
+                
+                try:
+                    length_val = float(row['E']) if pd.notna(row['E']) and str(row['E']).strip() != '' else 0.0
+                except (ValueError, TypeError):
+                    length_val = 0.0
+                
+                lsa_item = LSAItem(
+                    table_id=lsa_table.id,
+                    date_received=date_received,
+                    lsa_designation=lsa_designation,
+                    lsa=lsa_code,
+                    pallet_text=pallet_text,
+                    length_m=length_val,
+                    import_order=index + 1,
+                    used_in_orders='[]'  # Prázdný JSON array
+                )
+                db.session.add(lsa_item)
+                imported_count += 1
+                
+            except Exception as e:
+                print(f"Chyba při zpracování řádku {index}: {e}")
+                continue
         
         # Aktualizuj počet řádků
         lsa_table.rows_count = imported_count
