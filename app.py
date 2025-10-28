@@ -1750,7 +1750,6 @@ def backup_database():
             item_data = {
                 'id': item.id,
                 'order_id': item.order_id,
-                'lsa_item_id': getattr(item, 'lsa_item_id', None),
                 'date_received': item.date_received,  # Už je string
                 'lsa_designation': item.lsa_designation,
                 'lsa': item.lsa,
