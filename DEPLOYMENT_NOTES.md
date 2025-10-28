@@ -38,13 +38,20 @@ pip3.11 install --user -r requirements.txt
 
 ### 4. **Nastavení EMAIL API (volitelné pro PythonAnywhere):**
 
+> ⚠️ **BEZPEČNOST:** API klíče NIKDY neukládej do git repozitáře! Používej environment variables.
+
 #### **SendGrid (Doporučeno - 100 emails/den zdarma):**
-1. Registruj se na [sendgrid.com](https://sendgrid.com)
-2. Vytvoř API klíč v Settings → API Keys
-3. Nastav environment variable:
+1. ✅ Registrace dokončena na [sendgrid.com](https://sendgrid.com)
+2. ✅ API klíč vytvořen v Settings → API Keys
+3. ✅ Template ID dostupný v Dynamic Templates
+4. Nastav environment variable:
 ```bash
 export SENDGRID_API_KEY='your_sendgrid_api_key_here'
 ```
+5. **DŮLEŽITÉ:** Ověř sender email v SendGrid:
+   - Jdi na Settings → Sender Authentication → Single Sender Verification
+   - Přidej svou email adresu (např. tomas.tomeska@gmail.com)
+   - Ověř email adresu přes potvrzovací email
 
 #### **Mailgun (Alternativa - 5000 emails/měsíc zdarma):**
 1. Registruj se na [mailgun.com](https://mailgun.com)
@@ -60,7 +67,7 @@ export MAILGUN_DOMAIN='your-domain.mailgun.org'
 - Edituj `.bashrc` soubor
 - Přidej na konec:
 ```bash
-export SENDGRID_API_KEY='your_api_key_here'
+export SENDGRID_API_KEY='your_actual_sendgrid_api_key_here'
 # nebo pro Mailgun:
 # export MAILGUN_API_KEY='your_api_key_here'
 # export MAILGUN_DOMAIN='your-domain.mailgun.org'
