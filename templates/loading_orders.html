@@ -34,9 +34,6 @@
   <div class="col-md-6">
     <div class="d-flex justify-content-between align-items-center mb-3">
       <h3>Aktivní zakázky</h3>
-      <button type="button" class="btn btn-sm btn-outline-secondary" onclick="createTestOrder()">
-        ➕ Testovací prázdná zakázka
-      </button>
     </div>
     <ul class="list-group">
       {% for o in orders if not o.saved_for_later and not o.closed %}
@@ -214,35 +211,7 @@
       });
   }
 
-  // Funkce pro vytvoření testovací zakázky
-  function createTestOrder() {
-    if (!confirm('Vytvořit testovací prázdnou zakázku?\n\nTato zakázka bude prázdná a půjde smazat.')) {
-      return;
-    }
-
-    fetch('/create_test_order', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      }
-    })
-      .then(response => response.json())
-      .then(data => {
-        console.log('Create test order response:', data);
-        if (data.success) {
-          showSuccessMessage(data.message);
-          // Obnovit stránku po 2 sekundách
-          setTimeout(() => {
-            location.reload();
-          }, 2000);
-        } else {
-          showErrorMessage(data.error || 'Chyba při vytváření testovací zakázky');
-        }
-      })
-      .catch(error => {
-        showErrorMessage('Chyba při vytváření testovací zakázky: ' + error);
-      });
-  }
+  // Funkce pro vytvoření testovací zakázky - ODSTRANĚNO PRO BETA VERZI
 
   // Funkce pro zobrazení zpráv (používáme ze base.html theme systému)
   function showSuccessMessage(message) {
