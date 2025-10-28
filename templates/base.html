@@ -28,7 +28,7 @@
       --danger-bg: #f8d7da;
       --warning-bg: #fff3cd;
       --info-bg: #d1ecf1;
-      
+
       /* Lane barvy pro light mode */
       --lane-1-border: #0d6efd;
       --lane-1-bg: #f8f9ff;
@@ -59,7 +59,7 @@
       --danger-bg: #5a1e1e;
       --warning-bg: #4d3d1a;
       --info-bg: #1a3d4d;
-      
+
       /* Lane barvy pro dark mode - kontrastnější */
       --lane-1-border: #66b3ff;
       --lane-1-bg: #1a2e4d;
@@ -90,7 +90,7 @@
       --danger-bg: #ffebee;
       --warning-bg: #fff8e1;
       --info-bg: #fce4ec;
-      
+
       /* Lane barvy pro pink mode */
       --lane-1-border: #e91e63;
       --lane-1-bg: #fce4ec;
@@ -121,7 +121,7 @@
       --danger-bg: #ffebee;
       --warning-bg: #fff8e1;
       --info-bg: #e1f5fe;
-      
+
       /* Lane barvy pro green mode */
       --lane-1-border: #4caf50;
       --lane-1-bg: #e8f5e8;
@@ -145,7 +145,8 @@
       border-bottom: 1px solid var(--border-color);
     }
 
-    .navbar-brand, .nav-link {
+    .navbar-brand,
+    .nav-link {
       color: var(--text-color) !important;
     }
 
@@ -167,7 +168,9 @@
       color: var(--text-color);
     }
 
-    .card-title, .card-subtitle, .card-text {
+    .card-title,
+    .card-subtitle,
+    .card-text {
       color: var(--text-color) !important;
     }
 
@@ -185,13 +188,15 @@
     }
 
     /* Formuláře */
-    .form-control, .form-select {
+    .form-control,
+    .form-select {
       background-color: var(--input-bg);
       border-color: var(--input-border);
       color: var(--text-color);
     }
 
-    .form-control:focus, .form-select:focus {
+    .form-control:focus,
+    .form-select:focus {
       background-color: var(--input-bg);
       border-color: #86b7fe;
       color: var(--text-color);
@@ -324,11 +329,11 @@
     }
 
     /* Dark mode vylepšení pro homepage */
-    [data-theme="dark"] h1, 
-    [data-theme="dark"] h2, 
-    [data-theme="dark"] h3, 
-    [data-theme="dark"] h4, 
-    [data-theme="dark"] h5, 
+    [data-theme="dark"] h1,
+    [data-theme="dark"] h2,
+    [data-theme="dark"] h3,
+    [data-theme="dark"] h4,
+    [data-theme="dark"] h5,
     [data-theme="dark"] h6 {
       color: var(--text-color) !important;
     }
@@ -338,26 +343,27 @@
     }
 
     /* Pink/Green mode nadpisy */
-    [data-theme="pink"] h1, 
-    [data-theme="pink"] h2, 
-    [data-theme="pink"] h3, 
-    [data-theme="pink"] h4, 
-    [data-theme="pink"] h5, 
+    [data-theme="pink"] h1,
+    [data-theme="pink"] h2,
+    [data-theme="pink"] h3,
+    [data-theme="pink"] h4,
+    [data-theme="pink"] h5,
     [data-theme="pink"] h6 {
       color: var(--text-color) !important;
     }
 
-    [data-theme="green"] h1, 
-    [data-theme="green"] h2, 
-    [data-theme="green"] h3, 
-    [data-theme="green"] h4, 
-    [data-theme="green"] h5, 
+    [data-theme="green"] h1,
+    [data-theme="green"] h2,
+    [data-theme="green"] h3,
+    [data-theme="green"] h4,
+    [data-theme="green"] h5,
     [data-theme="green"] h6 {
       color: var(--text-color) !important;
     }
 
     /* Small text vylepšení */
-    small, .small {
+    small,
+    .small {
       color: var(--text-muted);
     }
 
@@ -430,11 +436,25 @@
     }
 
     @keyframes themeSwitch {
-      0% { transform: scale(1) rotate(0deg); }
-      25% { transform: scale(1.2) rotate(90deg); }
-      50% { transform: scale(0.8) rotate(180deg); }
-      75% { transform: scale(1.1) rotate(270deg); }
-      100% { transform: scale(1) rotate(360deg); }
+      0% {
+        transform: scale(1) rotate(0deg);
+      }
+
+      25% {
+        transform: scale(1.2) rotate(90deg);
+      }
+
+      50% {
+        transform: scale(0.8) rotate(180deg);
+      }
+
+      75% {
+        transform: scale(1.1) rotate(270deg);
+      }
+
+      100% {
+        transform: scale(1) rotate(360deg);
+      }
     }
 
     /* Dropdown menu styly */
@@ -569,18 +589,19 @@
     {% if request.endpoint != 'index' %}
     <nav class="navbar navbar-expand-lg navbar-light mb-4" style="background-color: #ffebee;">
       <div class="container-fluid">
-        <a class="navbar-brand fw-bold" href="{{ url_for('index') }}">Hueppe - správa zakázek</a>
+        <a class="navbar-brand fw-bold" href="/beta">Hueppe - správa zakázek</a>
         <div class="navbar-nav ms-auto">
-          <a class="nav-link fw-bold" href="{{ url_for('index') }}">🏠 Domů</a>
+          <a class="nav-link fw-bold" href="/beta">🏠 Domů</a>
           <a class="nav-link fw-bold" href="{{ url_for('loading_orders') }}">Zakázky</a>
           <a class="nav-link fw-bold" href="{{ url_for('lsa_tables') }}">📋 LSA Tabulky</a>
           <a class="nav-link fw-bold" href="{{ url_for('archive') }}">📦 Archiv</a>
           <a class="nav-link fw-bold" href="{{ url_for('imported_files') }}">Importované soubory</a>
           <a class="nav-link fw-bold" href="{{ url_for('settings') }}">Nastavení</a>
-          
+
           <!-- Theme selector dropdown -->
           <div class="dropdown">
-            <button class="theme-toggle dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" id="themeToggle" title="Vybrat téma">
+            <button class="theme-toggle dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false"
+              id="themeToggle" title="Vybrat téma">
               <span id="themeIcon">🌙</span>
             </button>
             <ul class="dropdown-menu dropdown-menu-end">
@@ -610,12 +631,12 @@
 
   <!-- Bootstrap JavaScript -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
-  
+
   <!-- Dark Mode funkcionalita - rozšířená pro více témat -->
   <script>
     // Theme management - rozšířený pro více témat
     const THEME_KEY = 'hueppe-theme';
-    
+
     // Definice témat
     const THEMES = {
       'light': {
@@ -627,7 +648,7 @@
         icon: '🌙'
       },
       'pink': {
-        name: 'Růžový režim',
+        name: 'Bobkův režim',
         icon: '🌸'
       },
       'green': {
@@ -635,29 +656,29 @@
         icon: '🌱'
       }
     };
-    
+
     // Získání aktuálního tématu
     function getCurrentTheme() {
       return localStorage.getItem(THEME_KEY) || 'light';
     }
-    
+
     // Aplikace tématu
     function applyTheme(theme) {
       if (!THEMES[theme]) {
         theme = 'light'; // Fallback
       }
-      
+
       document.documentElement.setAttribute('data-theme', theme);
-      
+
       // Aktualizace ikony
       const icon = document.getElementById('themeIcon');
       const toggle = document.getElementById('themeToggle');
-      
+
       if (icon && toggle) {
         icon.textContent = THEMES[theme].icon;
         toggle.title = `Aktuální téma: ${THEMES[theme].name}`;
       }
-      
+
       // Označit aktivní položku v dropdownu
       const dropdownItems = document.querySelectorAll('.dropdown-item');
       dropdownItems.forEach(item => {
@@ -667,36 +688,36 @@
         }
       });
     }
-    
+
     // Toggle mezi světlým a tmavým režimem (pro zpětnou kompatibilitu)
     function toggleTheme() {
       const currentTheme = getCurrentTheme();
       const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
       setTheme(newTheme);
     }
-    
+
     // Nastavení tématu
     function setTheme(theme) {
       if (!THEMES[theme]) {
         console.warn(`Neznámé téma: ${theme}, použiji light`);
         theme = 'light';
       }
-      
+
       localStorage.setItem(THEME_KEY, theme);
       applyTheme(theme);
-      
+
       // Animace pro smooth přechod
       document.body.style.transition = 'background-color 0.4s ease, color 0.4s ease';
-      
+
       // Show feedback
       showThemeChangeMessage(theme);
     }
-    
+
     // Zobrazení zprávy o změně tématu
     function showThemeChangeMessage(theme) {
       const themeData = THEMES[theme];
       if (!themeData) return;
-      
+
       // Vytvoření toast zprávy
       const toast = document.createElement('div');
       toast.className = 'alert alert-success theme-change-toast';
@@ -717,15 +738,15 @@
         color: var(--text-color);
         box-shadow: 0 4px 12px var(--shadow);
       `;
-      
+
       document.body.appendChild(toast);
-      
+
       // Animace zobrazení
       setTimeout(() => {
         toast.style.opacity = '1';
         toast.style.transform = 'translateX(0)';
       }, 100);
-      
+
       // Automatické skrytí
       setTimeout(() => {
         toast.style.opacity = '0';
@@ -737,17 +758,17 @@
         }, 400);
       }, 2500);
     }
-    
+
     // Inicializace při načtení stránky
-    document.addEventListener('DOMContentLoaded', function() {
+    document.addEventListener('DOMContentLoaded', function () {
       const savedTheme = getCurrentTheme();
       applyTheme(savedTheme);
-      
+
       console.log(`Hueppe: Načteno téma "${savedTheme}"`);
     });
-    
+
     // Klávesová zkratka pro rychlé přepnutí tématu (Ctrl/Cmd + Shift + D)
-    document.addEventListener('keydown', function(e) {
+    document.addEventListener('keydown', function (e) {
       if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'D') {
         e.preventDefault();
         toggleTheme();
