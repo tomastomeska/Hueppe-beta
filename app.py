@@ -1745,10 +1745,12 @@ def backup_database():
     try:
         backup_data = {
             'export_date': datetime.now().isoformat(),
-            'version': '1.0',
+            'version': '2.0',  # Zvýšíme verzi pro nové funkce
             'orders': [],
             'pallet_items': [],
-            'imported_files': []
+            'imported_files': [],
+            'lsa_tables': [],
+            'lsa_items': []
         }
         
         # Export zakázek
@@ -1782,16 +1784,17 @@ def backup_database():
             item_data = {
                 'id': item.id,
                 'order_id': item.order_id,
-                'date_received': item.date_received.isoformat() if item.date_received else None,
+                'lsa_item_id': getattr(item, 'lsa_item_id', None),
+                'date_received': item.date_received,  # Už je string
                 'lsa_designation': item.lsa_designation,
                 'lsa': item.lsa,
-                'name': item.name,
-                'length_m': item.length_m,
-                'width_m': item.width_m,
-                'height_m': item.height_m,
+                'pallet_text': getattr(item, 'pallet_text', getattr(item, 'name', '')),  # Fallback pro kompatibilitu
+                'qty': getattr(item, 'qty', 1),
                 'weight': item.weight,
+                'length_m': item.length_m,
                 'assigned_lane': item.assigned_lane,
-                'import_order': item.import_order
+                'import_order': item.import_order,
+                'loaded': getattr(item, 'loaded', False)
             }
             backup_data['pallet_items'].append(item_data)
         
@@ -1807,6 +1810,35 @@ def backup_database():
                 'rows_imported': file.rows_imported
             }
             backup_data['imported_files'].append(file_data)
+        
+        # Export LSA tabulek
+        lsa_tables = LSATable.query.all()
+        for table in lsa_tables:
+            table_data = {
+                'id': table.id,
+                'name': table.name,
+                'filename': table.filename,
+                'file_hash': table.file_hash,
+                'created_at': table.created_at.isoformat() if table.created_at else None,
+                'rows_count': table.rows_count
+            }
+            backup_data['lsa_tables'].append(table_data)
+        
+        # Export LSA položek
+        lsa_items = LSAItem.query.all()
+        for item in lsa_items:
+            item_data = {
+                'id': item.id,
+                'table_id': item.table_id,
+                'date_received': item.date_received,
+                'lsa_designation': item.lsa_designation,
+                'lsa': item.lsa,
+                'pallet_text': item.pallet_text,
+                'length_m': item.length_m,
+                'import_order': item.import_order,
+                'used_in_orders': item.used_in_orders
+            }
+            backup_data['lsa_items'].append(item_data)
         
         # Vytvoření response s JSON souborem
         backup_json = json.dumps(backup_data, indent=2, ensure_ascii=False)
