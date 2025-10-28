@@ -2027,10 +2027,14 @@ def upload_lsa_table():
                 if not lsa_code or lsa_code == '' or lsa_code == 'nan':
                     continue
                 
+                # Sloupec E obsahuje POČET PALET, ne délku!
                 try:
-                    length_val = float(row['E']) if pd.notna(row['E']) and str(row['E']).strip() != '' else 0.0
+                    qty_val = int(float(row['E'])) if pd.notna(row['E']) and str(row['E']).strip() != '' else 1
                 except (ValueError, TypeError):
-                    length_val = 0.0
+                    qty_val = 1
+                
+                # Délku parsujeme z textu palety (standardní způsob)
+                length_val = parse_length_from_text(pallet_text)
                 
                 lsa_item = LSAItem(
                     table_id=lsa_table.id,
@@ -2038,7 +2042,8 @@ def upload_lsa_table():
                     lsa_designation=lsa_designation,
                     lsa=lsa_code,
                     pallet_text=pallet_text,
-                    length_m=length_val,
+                    qty=qty_val,  # OPRAVA: použij počet palet ze sloupce E
+                    length_m=length_val,  # OPRAVA: parsuj délku z textu
                     import_order=index + 1,
                     used_in_orders='[]'  # Prázdný JSON array
                 )
