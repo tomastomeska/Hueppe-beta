@@ -2405,17 +2405,20 @@ function loadLSATables() {
         container.style.display = 'block';
         btn.innerHTML = '🔼 Skrýt LSA tabulky';
         
-        // Načti dostupné LSA tabulky
-        fetch('/lsa_tables')
-            .then(response => response.text())
-            .then(html => {
-                // Extrahujeme tabulky z odpovědi (je to celá HTML stránka)
-                // Místo toho použijeme API endpoint
-                return fetch('/get_lsa_tables_list');
+        // Načti dostupné LSA tabulky přímo z API
+        console.log('Načítám LSA tabulky...');
+        fetch('/get_lsa_tables_list')
+            .then(response => {
+                console.log('API response status:', response.status);
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                return response.json();
             })
-            .then(response => response.json())
             .then(data => {
+                console.log('LSA tabulky data:', data);
                 lsaTablesData = data.tables || [];
+                console.log('Počet tabulek:', lsaTablesData.length);
                 populateLSATableSelect();
             })
             .catch(error => {
@@ -2434,12 +2437,24 @@ function populateLSATableSelect() {
     const select = document.getElementById('lsaTableSelect');
     select.innerHTML = '<option value="">-- Vyberte LSA tabulku --</option>';
     
+    console.log('Populuji dropdown s', lsaTablesData.length, 'tabulkami');
+    
     lsaTablesData.forEach(table => {
+        console.log('Přidávám tabulku:', table.name, 'ID:', table.id);
         const option = document.createElement('option');
         option.value = table.id;
         option.textContent = `${table.name} (${table.rows_count} LSA)`;
         select.appendChild(option);
     });
+    
+    if (lsaTablesData.length === 0) {
+        const option = document.createElement('option');
+        option.value = '';
+        option.textContent = 'Žádné LSA tabulky nenalezeny';
+        option.disabled = true;
+        select.appendChild(option);
+        console.log('Žádné tabulky k zobrazení');
+    }
 }
 
 function loadLSATableItems(tableId) {
