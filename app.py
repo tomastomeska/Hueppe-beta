@@ -2162,6 +2162,7 @@ def import_lsa_from_table():
                 lsa_designation=lsa_item.lsa_designation,
                 lsa=lsa_item.lsa,
                 pallet_text=lsa_item.pallet_text,
+                qty=lsa_item.qty,  # OPRAVA: použij počet palet z LSA
                 length_m=lsa_item.length_m,
                 import_order=lsa_item.import_order,
                 assigned_lane=0,
