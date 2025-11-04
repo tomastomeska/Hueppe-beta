@@ -295,14 +295,14 @@
               <!-- Lane 1 -->
               <div class="truck-lane" data-lane="1" ondrop="drop(event)" ondragover="allowDrop(event)">
                 <div class="drop-zone top" data-lane="1" data-position="0" ondrop="dropAtPosition(event)" ondragover="allowDrop(event)"></div>
-                {% for item in order.items|selectattr('assigned_lane', 'equalto', 1)|sort(attribute='import_order') %}
+                {% for item in sorted_items_by_lane[1] %}
                 <div class="pallet-box" draggable="true" ondragstart="drag(event)" data-item-id="{{ item.id }}" data-lsa="{{ item.lsa }}">
                   <div class="pallet-length">{{ '%.1f'|format(item.length_m) }}</div>
                   <div class="pallet-lsa" data-lsa="{{ item.lsa }}">{{ item.lsa }}</div>
                 </div>
                 <div class="drop-zone" data-lane="1" data-position="{{ loop.index }}" ondrop="dropAtPosition(event)" ondragover="allowDrop(event)"></div>
                 {% endfor %}
-                {% if not order.items|selectattr('assigned_lane', 'equalto', 1)|list %}
+                {% if not sorted_items_by_lane[1] %}
                 <div class="drop-zone bottom" data-lane="1" data-position="0" ondrop="dropAtPosition(event)" ondragover="allowDrop(event)"></div>
                 {% endif %}
               </div>
@@ -310,14 +310,14 @@
               <!-- Lane 2 -->
               <div class="truck-lane" data-lane="2" ondrop="drop(event)" ondragover="allowDrop(event)">
                 <div class="drop-zone top" data-lane="2" data-position="0" ondrop="dropAtPosition(event)" ondragover="allowDrop(event)"></div>
-                {% for item in order.items|selectattr('assigned_lane', 'equalto', 2)|sort(attribute='import_order') %}
+                {% for item in sorted_items_by_lane[2] %}
                 <div class="pallet-box" draggable="true" ondragstart="drag(event)" data-item-id="{{ item.id }}" data-lsa="{{ item.lsa }}">
                   <div class="pallet-length">{{ '%.1f'|format(item.length_m) }}</div>
                   <div class="pallet-lsa" data-lsa="{{ item.lsa }}">{{ item.lsa }}</div>
                 </div>
                 <div class="drop-zone" data-lane="2" data-position="{{ loop.index }}" ondrop="dropAtPosition(event)" ondragover="allowDrop(event)"></div>
                 {% endfor %}
-                {% if not order.items|selectattr('assigned_lane', 'equalto', 2)|list %}
+                {% if not sorted_items_by_lane[2] %}
                 <div class="drop-zone bottom" data-lane="2" data-position="0" ondrop="dropAtPosition(event)" ondragover="allowDrop(event)"></div>
                 {% endif %}
               </div>
@@ -325,14 +325,14 @@
               <!-- Lane 3 -->
               <div class="truck-lane" data-lane="3" ondrop="drop(event)" ondragover="allowDrop(event)">
                 <div class="drop-zone top" data-lane="3" data-position="0" ondrop="dropAtPosition(event)" ondragover="allowDrop(event)"></div>
-                {% for item in order.items|selectattr('assigned_lane', 'equalto', 3)|sort(attribute='import_order') %}
+                {% for item in sorted_items_by_lane[3] %}
                 <div class="pallet-box" draggable="true" ondragstart="drag(event)" data-item-id="{{ item.id }}" data-lsa="{{ item.lsa }}">
                   <div class="pallet-length">{{ '%.1f'|format(item.length_m) }}</div>
                   <div class="pallet-lsa" data-lsa="{{ item.lsa }}">{{ item.lsa }}</div>
                 </div>
                 <div class="drop-zone" data-lane="3" data-position="{{ loop.index }}" ondrop="dropAtPosition(event)" ondragover="allowDrop(event)"></div>
                 {% endfor %}
-                {% if not order.items|selectattr('assigned_lane', 'equalto', 3)|list %}
+                {% if not sorted_items_by_lane[3] %}
                 <div class="drop-zone bottom" data-lane="3" data-position="0" ondrop="dropAtPosition(event)" ondragover="allowDrop(event)"></div>
                 {% endif %}
               </div>

@@ -176,7 +176,7 @@ def parse_length_from_text(text):
     return 0.0
 
 def auto_assign_lanes(order_id):
-    """Automatically assign pallets to lanes using round-robin with auto-optimization"""
+    """Automatically assign pallets to lanes using round-robin with LSA grouping"""
     order = Order.query.get_or_404(order_id)
     all_items = PalletItem.query.filter_by(order_id=order.id).order_by(PalletItem.import_order).all()
     
@@ -187,10 +187,24 @@ def auto_assign_lanes(order_id):
     for item in all_items:
         item.assigned_lane = 0
     
-    # Simple round-robin assignment: 1, 2, 3, 1, 2, 3, ... (podle původního pořadí importu)
-    for i, item in enumerate(all_items):
-        lane = (i % 3) + 1  # gives 1, 2, 3, 1, 2, 3, ...
-        item.assigned_lane = lane
+    # Seskupení palet podle LSA kódu (zachová původní pořadí v rámci skupiny)
+    from collections import OrderedDict
+    lsa_groups = OrderedDict()
+    
+    for item in all_items:
+        lsa_code = item.lsa or 'NO_LSA'
+        if lsa_code not in lsa_groups:
+            lsa_groups[lsa_code] = []
+        lsa_groups[lsa_code].append(item)
+    
+    # Přiřazení lanes: cyklicky 1,2,3,1,2,3... pro každou skupinu LSA
+    lane_counter = 0
+    
+    for lsa_code, items in lsa_groups.items():
+        for item in items:
+            lane = (lane_counter % 3) + 1  # gives 1, 2, 3, 1, 2, 3, ...
+            item.assigned_lane = lane
+            lane_counter += 1
     
     db.session.commit()
     
@@ -580,10 +594,36 @@ def order_view(order_id):
     if is_full:
         price = order.full_truck_price
     
+    # Vytvoříme správně seřazené položky podle LSA skupin pro vizualizaci
+    from collections import OrderedDict
+    
+    # Pro každou lane vytvoříme správně seřazenou sekvenci
+    sorted_items_by_lane = {1: [], 2: [], 3: []}
+    
+    # Seskupíme všechny položky podle LSA
+    all_items = list(order.items)
+    all_items.sort(key=lambda x: x.import_order)  # Zachováme původní pořadí importu
+    
+    lsa_groups = OrderedDict()
+    for item in all_items:
+        lsa_code = item.lsa or 'NO_LSA'
+        if lsa_code not in lsa_groups:
+            lsa_groups[lsa_code] = []
+        lsa_groups[lsa_code].append(item)
+    
+    # Pro každou lane seřadíme položky podle LSA skupin
+    for lane in [1, 2, 3]:
+        lane_items = []
+        for lsa_code, items in lsa_groups.items():
+            # Přidáme položky z této LSA skupiny, které patří do aktuální lane
+            lane_group_items = [item for item in items if item.assigned_lane == lane]
+            lane_items.extend(lane_group_items)
+        sorted_items_by_lane[lane] = lane_items
+    
     # Generate LSA summary for closed orders
     lsa_summary = generate_lsa_summary(order) if order.closed else {}
     
-    return render_template('order.html', order=order, lane_totals=lane_totals, pallet_places=pallet_places, price=price, is_full=is_full, total_weight=total_weight, lsa_summary=lsa_summary)
+    return render_template('order.html', order=order, lane_totals=lane_totals, pallet_places=pallet_places, price=price, is_full=is_full, total_weight=total_weight, lsa_summary=lsa_summary, sorted_items_by_lane=sorted_items_by_lane)
 
 @app.route('/upload/<int:order_id>', methods=['GET','POST'])
 def upload(order_id):
