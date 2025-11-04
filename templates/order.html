@@ -891,6 +891,7 @@
   justify-content: center;
   border-radius: 0 0 2px 2px; /* Zaoblení dolních rohů */
   color: white; /* Bílý text pro všechny LSA */
+  background-color: transparent; /* Žádné pozadí - barva bude na pallet-box */
 }
 
 /* Dark mode vylepšení pro pallet text */
@@ -1169,6 +1170,25 @@
 function getLSAColor(lsaCode) {
     if (!lsaCode) return '#6c757d';
     
+    // Predefinované barvy pro lepší rozlišení
+    const colors = [
+        '#e74c3c', // červená
+        '#3498db', // modrá  
+        '#2ecc71', // zelená
+        '#f39c12', // oranžová
+        '#9b59b6', // fialová
+        '#1abc9c', // tyrkysová
+        '#34495e', // tmavě modrá
+        '#e67e22', // tmavě oranžová
+        '#16a085', // tmavě tyrkysová
+        '#8e44ad', // tmavě fialová
+        '#27ae60', // tmavě zelená
+        '#2980b9', // střední modrá
+        '#d35400', // tmavě červená
+        '#7f8c8d', // šedá
+        '#c0392b'  // bordó
+    ];
+    
     // Hash LSA kódu pro konzistentní barvy
     let hash = 0;
     for (let i = 0; i < lsaCode.length; i++) {
@@ -1177,21 +1197,20 @@ function getLSAColor(lsaCode) {
         hash = hash & hash; // Convert to 32bit integer
     }
     
-    // Převod na HSL pro lepší čitelnost
-    const hue = Math.abs(hash) % 360;
-    const saturation = 70;  // 70% saturace
-    const lightness = 45;   // 45% světlost
-    
-    return `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+    // Vybrat barvu z pole
+    const colorIndex = Math.abs(hash) % colors.length;
+    return colors[colorIndex];
 }
 
 // Inicializace barev LSA při načtení stránky
 document.addEventListener('DOMContentLoaded', function() {
-    const lsaElements = document.querySelectorAll('[data-lsa]');
-    lsaElements.forEach(element => {
-        const lsaCode = element.getAttribute('data-lsa');
-        if (element.classList.contains('pallet-lsa')) {
-            element.style.backgroundColor = getLSAColor(lsaCode);
+    const palletBoxes = document.querySelectorAll('.pallet-box');
+    palletBoxes.forEach(box => {
+        const lsaElement = box.querySelector('[data-lsa]');
+        if (lsaElement) {
+            const lsaCode = lsaElement.getAttribute('data-lsa');
+            // Nastavíme barvu na celou paletu (pallet-box) místo jen na LSA text
+            box.style.backgroundColor = getLSAColor(lsaCode);
         }
     });
 });
@@ -1344,11 +1363,13 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     
     function initializeLSAColors() {
-        const lsaElements = document.querySelectorAll('[data-lsa]');
-        lsaElements.forEach(element => {
-            const lsaCode = element.getAttribute('data-lsa');
-            if (element.classList.contains('pallet-lsa')) {
-                element.style.backgroundColor = getLSAColor(lsaCode);
+        const palletBoxes = document.querySelectorAll('.pallet-box');
+        palletBoxes.forEach(box => {
+            const lsaElement = box.querySelector('[data-lsa]');
+            if (lsaElement) {
+                const lsaCode = lsaElement.getAttribute('data-lsa');
+                // Nastavíme barvu na celou paletu (pallet-box) místo jen na LSA text
+                box.style.backgroundColor = getLSAColor(lsaCode);
             }
         });
     }
