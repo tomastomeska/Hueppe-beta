@@ -380,7 +380,7 @@ def send_email(to_emails, subject, body, html_body=None, sender_email=None, repl
         return False, f"Chyba při odesílání emailu: {str(e)}"
 
 def generate_lsa_summary(order):
-    """Vygeneruje shrnutí LSA kódů s počty palet"""
+    """Vygeneruje shrnutí LSA kódů s počty palet a stavem naložení"""
     lsa_summary = {}
     
     for item in order.items:
@@ -389,17 +389,30 @@ def generate_lsa_summary(order):
                 lsa_summary[item.lsa] = {
                     'count': 0,
                     'total_weight': 0.0,
-                    'lengths': {}
+                    'lengths': {},
+                    'loaded_count': 0,
+                    'is_all_loaded': True  # Začneme s True a změníme na False pokud najdeme nenaložené
                 }
             
             lsa_summary[item.lsa]['count'] += 1
             lsa_summary[item.lsa]['total_weight'] += item.weight
+            
+            # Počítání naložených palet
+            if item.loaded:
+                lsa_summary[item.lsa]['loaded_count'] += 1
+            else:
+                lsa_summary[item.lsa]['is_all_loaded'] = False
             
             # Grupování podle délky
             length_key = f"{item.length_m:.1f}m"
             if length_key not in lsa_summary[item.lsa]['lengths']:
                 lsa_summary[item.lsa]['lengths'][length_key] = 0
             lsa_summary[item.lsa]['lengths'][length_key] += 1
+    
+    # Finální kontrola is_all_loaded
+    for lsa_data in lsa_summary.values():
+        if lsa_data['loaded_count'] == 0:
+            lsa_data['is_all_loaded'] = False
     
     return lsa_summary
 
@@ -1644,13 +1657,21 @@ def mark_lsa_loaded():
         
         db.session.commit()
         
+        # Spočítáme aktuální stav LSA
+        loaded_count = sum(1 for item in items if item.loaded)
+        total_count = len(items)
+        is_all_loaded = loaded_count == total_count
+        
         status_text = "naložené" if loaded else "nenačítané"
         return jsonify({
             'success': True, 
             'message': f'LSA {lsa} označeno jako {status_text} ({count} palet)',
             'count': count,
             'lsa': lsa,
-            'loaded': loaded
+            'loaded': loaded,
+            'loaded_count': loaded_count,
+            'total_count': total_count,
+            'is_all_loaded': is_all_loaded
         })
         
     except Exception as e:

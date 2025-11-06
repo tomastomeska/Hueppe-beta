@@ -487,10 +487,17 @@
                              id="lsa-{{ lsa }}" 
                              data-lsa="{{ lsa }}" 
                              data-order-id="{{ order.id }}"
+                             {% if data['is_all_loaded'] %}checked{% endif %}
                              onchange="toggleLSALoaded(this.dataset.lsa, this.dataset.orderId, this.checked)">
                       <label class="form-check-label" for="lsa-{{ lsa }}">
                         <span class="loading-status" id="status-{{ lsa }}">
-                          <span class="badge bg-secondary">Nezkontrolováno</span>
+                          {% if data['is_all_loaded'] %}
+                            <span class="badge bg-success">Zkontrolováno</span>
+                          {% elif data['loaded_count'] > 0 %}
+                            <span class="badge bg-warning">Částečně ({{ data['loaded_count'] }}/{{ data['count'] }})</span>
+                          {% else %}
+                            <span class="badge bg-secondary">Nezkontrolováno</span>
+                          {% endif %}
                         </span>
                       </label>
                     </div>
@@ -1794,10 +1801,24 @@ function toggleLSALoaded(lsa, orderId, loaded) {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
-            // Aktualizovat status badge
-            const badgeClass = loaded ? 'bg-success' : 'bg-secondary';
-            const badgeText = loaded ? '✅ Naloženo' : 'Nezkontrolováno';
+            // Aktualizovat status badge podle aktuálního stavu
+            let badgeClass, badgeText;
+            
+            if (data.is_all_loaded) {
+                badgeClass = 'bg-success';
+                badgeText = 'Zkontrolováno';
+            } else if (data.loaded_count > 0) {
+                badgeClass = 'bg-warning';
+                badgeText = `Částečně (${data.loaded_count}/${data.total_count})`;
+            } else {
+                badgeClass = 'bg-secondary';
+                badgeText = 'Nezkontrolováno';
+            }
+            
             statusElement.innerHTML = `<span class="badge ${badgeClass}">${badgeText}</span>`;
+            
+            // Aktualizovat checkbox
+            checkbox.checked = data.is_all_loaded;
             
             // Aktualizovat celkové statistiky
             updateLoadingStatistics(orderId);
